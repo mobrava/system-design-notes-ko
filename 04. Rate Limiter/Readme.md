@@ -1,132 +1,132 @@
-# Chapter 4: Design a Rate Limiter
+# 4장: 처리율 제한기 설계
 
-## Introduction
-This chapter explores the design and implementation of a rate limiter—a system component used to control traffic rates sent by clients or services. Rate limiters are crucial for preventing abuse, reducing costs, and ensuring the stability of server resources. Examples of their use include limiting posts, account creations, and reward claims.
+## 소개
+이 장에서는 클라이언트나 서비스가 보내는 트래픽의 처리율을 제어하는 시스템 구성 요소인 처리율 제한기의 설계와 구현을 살펴본다. 처리율 제한기는 남용을 방지하고 비용을 절감하며 서버 자원의 안정성을 보장하는 데 매우 중요하다. 게시물 작성, 계정 생성 및 보상 수령 횟수 제한 등이 사용 예다.
 
-## Benefits of Rate Limiting
-- **Preventing DoS Attacks:** Blocking excess calls to avoid resource starvation.
-- **Cost Reduction:** Limiting unnecessary requests to reduce server expenses.
-- **Preventing Overloads:** Filtering out excessive requests to stabilize server performance.
+## 처리율 제한의 장점
+- **DoS 공격 방지:** 과도한 호출을 차단하여 자원 고갈을 방지한다.
+- **비용 절감:** 불필요한 요청을 제한하여 서버 비용을 줄인다.
+- **과부하 방지:** 과도한 요청을 걸러 내 서버 성능을 안정화한다.
 
-## Step 1: Understanding the Problem
-### Key Features
-- Server-side API rate limiter.
-- Support for multiple throttle rules.
-- Handle large-scale systems in distributed environments.
-- Option for a standalone service or application-level code.
-- Inform users when throttled.
+## 1단계: 문제 이해
+### 핵심 기능
+- 서버 측 API 처리율 제한기.
+- 여러 제한 규칙 지원.
+- 분산 환경의 대규모 시스템 처리.
+- 독립형 서비스 또는 애플리케이션 수준 코드로 구현하는 선택지.
+- 요청이 제한되면 사용자에게 알림.
 
-### Requirements
-- Accurate request throttling.
-- Minimal latency.
-- Low memory usage.
-- Distributed capability.
-- Clear exception handling.
-- High fault tolerance.
+### 요구사항
+- 정확한 요청 제한.
+- 최소한의 지연 시간.
+- 적은 메모리 사용량.
+- 분산 처리 능력.
+- 명확한 예외 처리.
+- 높은 내결함성.
 
-## Step 2: High-Level Design
-### Placement Options
+## 2단계: 개략적 설계
+### 배치 선택지
 <div style="margin-left:2rem">
-    <img src="./images/rate_limiter_architecture.png"  alt="Rate Limiting Middleware Architecture" width="550">
+    <img src="./images/rate_limiter_architecture.png"  alt="처리율 제한 미들웨어 아키텍처" width="550">
 </div>
 
-1. **Client-Side Implementation:** Unreliable due to potential misuse.
-2. **Server-Side Implementation:** Preferred for control and reliability.
-3. **Middleware (API Gateway):** A flexible option for integrated rate limiting.
+1. **클라이언트 측 구현:** 오용될 가능성이 있어 신뢰할 수 없다.
+2. **서버 측 구현:** 제어와 신뢰성 측면에서 선호된다.
+3. **미들웨어(API 게이트웨이):** 통합 처리율 제한을 위한 유연한 선택지다.
 
 
-### Guidelines for Placement
-- Evaluate current tech stack and choose efficient options.
-- Select appropriate algorithms based on business needs.
-- Use an API gateway if microservices are employed.
-- Opt for commercial solutions if resources are limited.
+### 배치 지침
+- 현재 기술 스택을 평가하고 효율적인 선택지를 고른다.
+- 비즈니스 요구에 따라 적절한 알고리즘을 선택한다.
+- 마이크로서비스를 사용한다면 API 게이트웨이를 사용한다.
+- 자원이 제한적이라면 상용 솔루션을 선택한다.
 
-## Step 3: Rate Limiting Algorithms
-### 1. Token Bucket
+## 3단계: 처리율 제한 알고리즘
+### 1. 토큰 버킷
 <div style="margin-left:2rem">
-  <img src="./images/token-bucket.png"  alt="Token Bucket Algorithm" width="550">
+  <img src="./images/token-bucket.png"  alt="토큰 버킷 알고리즘" width="550">
 </div>
 
-- **Description:** Tokens are added to a bucket at a fixed rate; each request consumes a token.
-- **Parameters:** Bucket size and refill rate.
-- **Pros:** Easy to implement, memory-efficient, supports traffic bursts.
-- **Cons:** Requires careful parameter tuning.
+- **설명:** 토큰이 고정된 속도로 버킷에 추가되며, 각 요청은 토큰 하나를 소비한다.
+- **매개변수:** 버킷 크기와 재충전 속도.
+- **장점:** 구현하기 쉽고 메모리 효율적이며 트래픽 버스트를 지원한다.
+- **단점:** 매개변수를 신중하게 조정해야 한다.
 
 
 
-### 2. Leaking Bucket
+### 2. 누출 버킷
 <div style="margin-left:2rem">
-  <img src="./images/leaking-bucket.png"  alt="Leaking Bucket Algorithm" width="550">
+  <img src="./images/leaking-bucket.png"  alt="누출 버킷 알고리즘" width="550">
 </div>
 
-- **Description:** Processes requests at a fixed rate using a FIFO queue.
-- **Pros:** Memory-efficient, stable outflow rate.
-- **Cons:** Traffic bursts may delay recent requests.
+- **설명:** FIFO 큐를 사용하여 요청을 고정된 속도로 처리한다.
+- **장점:** 메모리 효율적이며 출력 속도가 안정적이다.
+- **단점:** 트래픽 버스트로 인해 최근 요청이 지연될 수 있다.
   
 
-  Example: https://github.com/uber-go/ratelimit
+  예시: https://github.com/uber-go/ratelimit
 
 
 
-### 3. Fixed Window Counter
+### 3. 고정 윈도우 카운터
 <div style="margin-left:2rem">
-  <img src="./images/fixed-window-counter.png"  alt="Fixed Window Counter" width="550">
+  <img src="./images/fixed-window-counter.png"  alt="고정 윈도우 카운터" width="550">
 </div>
 
-- **Description:** Divides time into fixed intervals and uses counters to limit requests.
-- **Pros:** Simple, efficient for specific use cases.
-- **Cons:** Traffic spikes at window edges can exceed limits.
+- **설명:** 시간을 고정된 구간으로 나누고 카운터를 사용하여 요청을 제한한다.
+- **장점:** 단순하며 특정 사용 사례에 효율적이다.
+- **단점:** 윈도우 경계의 트래픽 급증으로 제한을 초과할 수 있다.
 
-- Sudden burst of traffic at the edges of time windows
-could cause more requests than allowed quota to go through.
+- 시간 윈도우의 경계에서 트래픽이 갑자기 급증하면 허용된 할당량보다 많은 요청이 통과할 수 있다.
 
-  <img src="./images/fixed-window-issue.png"  alt="Fixed Window Issue" width="550">
+  <img src="./images/fixed-window-issue.png"  alt="고정 윈도우의 문제" width="550">
 
 
-### 4. Sliding Window Log
+### 4. 슬라이딩 윈도우 로그
 <div style="margin-left:2rem">
-  <img src="./images/sliding-window-log.png"  alt="Sliding Window Log" width="550">
+  <img src="./images/sliding-window-log.png"  alt="슬라이딩 윈도우 로그" width="550">
 </div>
 
-- **Description:** Tracks timestamps to allow a rolling time window.
-- **Pros:** Accurate rate limiting.
-- **Cons:** High memory consumption.
-  
-
-
-### 5. Sliding Window Counter
-<div style="margin-left:2rem">
-  <img src="./images/sliding-window-counter.png"  alt="Fixed Window Counter" width="550">
-</div>
-
-- **Description:** Combines fixed window and sliding log methods for smoothing spikes.
-- **Pros:** Memory-efficient, handles traffic bursts.
-- **Cons:** Approximation may not be perfectly strict.
+- **설명:** 타임스탬프를 추적하여 연속적으로 이동하는 시간 윈도우를 적용한다.
+- **장점:** 처리율을 정확하게 제한한다.
+- **단점:** 메모리 사용량이 많다.
   
 
 
 
-## High-Level Architecture
+### 5. 슬라이딩 윈도우 카운터
 <div style="margin-left:2rem">
-  <img src="./images/architecture.png" style="margin-left: 40px; margin-top: 40px; margin-bottom: 20px;" alt="Architecture" width="550">
+  <img src="./images/sliding-window-counter.png"  alt="고정 윈도우 카운터" width="550">
 </div>
 
-- **Data Storage:** Use in-memory caching (e.g., Redis) for fast counter operations.
-- **Steps:**
-  1. Client sends request to middleware.
-  2. Middleware checks counters in Redis.
-  3. Request is processed or rejected based on limits.
+- **설명:** 급증을 완화하기 위해 고정 윈도우와 슬라이딩 윈도우 로그 방식을 결합한다.
+- **장점:** 메모리 효율적이며 트래픽 버스트를 처리한다.
+- **단점:** 근사 방식이므로 제한이 완전히 정확하지 않을 수 있다.
+  
 
 
-## Advanced Considerations
-### Distributed Environments
-- **Challenges:** Race conditions, synchronization issues.
-- **Solutions:** Use locks, Lua scripts, or sorted sets in Redis. Employ centralized data stores for synchronization.
 
-### Performance Optimizations
-- Multi-data center setups for reduced latency.
-- Eventual consistency models for synchronization.
 
-### Monitoring
-- Regular analytics to ensure algorithm effectiveness and adjust rules as needed.
+## 개략적 아키텍처
+<div style="margin-left:2rem">
+  <img src="./images/architecture.png" style="margin-left: 40px; margin-top: 40px; margin-bottom: 20px;" alt="아키텍처" width="550">
+</div>
 
+- **데이터 저장소:** 빠른 카운터 작업을 위해 인메모리 캐시(예: Redis)를 사용한다.
+- **단계:**
+  1. 클라이언트가 미들웨어에 요청을 보낸다.
+  2. 미들웨어가 Redis의 카운터를 확인한다.
+  3. 제한에 따라 요청을 처리하거나 거부한다.
+
+
+## 고급 고려 사항
+### 분산 환경
+- **과제:** 경쟁 상태, 동기화 문제.
+- **해결책:** Redis에서 락, Lua 스크립트 또는 정렬 집합을 사용한다. 동기화를 위해 중앙 집중식 데이터 저장소를 사용한다.
+
+### 성능 최적화
+- 지연 시간을 줄이기 위한 다중 데이터 센터 구성.
+- 동기화를 위한 최종 일관성 모델.
+
+### 모니터링
+- 알고리즘이 효과적으로 작동하는지 정기적으로 분석하고 필요에 따라 규칙을 조정한다.

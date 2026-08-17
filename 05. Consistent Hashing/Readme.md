@@ -1,99 +1,95 @@
-# Chapter 5: Design Consistent Hashing
+# 5장: 일관 해싱 설계
 
-## Introduction
-This chapter explores consistent hashing, a technique essential for achieving horizontal scaling by efficiently distributing requests and data across servers. It minimizes data redistribution when servers are added or removed and ensures an even distribution of data to mitigate issues like server hotspots.
+## 소개
+이 장에서는 여러 서버에 요청과 데이터를 효율적으로 분산하여 수평 확장을 달성하는 데 필수적인 기법인 일관 해싱을 살펴본다. 일관 해싱은 서버를 추가하거나 제거할 때 데이터 재분배를 최소화하고, 데이터를 고르게 분산하여 서버 핫스팟과 같은 문제를 완화한다.
 
-## The Rehashing Problem
-### Explanation
-In traditional hashing methods, such as `serverIndex = hash(key) % N`, data redistribution becomes problematic when the number of servers changes. For example:
-- Removing a server causes most keys to be reassigned, leading to cache misses.
-- Adding a server results in unnecessary key redistributions.
+## 재해싱 문제
+### 설명
+`serverIndex = hash(key) % N`과 같은 기존 해싱 방식에서는 서버 수가 바뀔 때 데이터 재분배가 문제가 된다. 예를 들면 다음과 같다.
+- 서버를 제거하면 대부분의 키가 다시 할당되어 캐시 미스가 발생한다.
+- 서버를 추가하면 불필요하게 키가 재분배된다.
 
-  <img src="./images/server-hashing.png"  alt="Server hashing" width="450">
+  <img src="./images/server-hashing.png"  alt="서버 해싱" width="450">
 
-- This approach works well when the size of the server pool is fixed. However, problems arise when new servers are added, or existing servers are removed.
+- 이 접근법은 서버 풀의 크기가 고정되어 있을 때 효과적이다. 그러나 새 서버를 추가하거나 기존 서버를 제거하면 문제가 발생한다.
 
-  <img src="./images/server-hashing-miss.png"  alt="Server hashing Miss" width="450">
+  <img src="./images/server-hashing-miss.png"  alt="서버 해싱 미스" width="450">
 
-### Key Issue
-Redistribution of most keys when server count changes causes inefficiency and overload.
+### 핵심 문제
+서버 수가 바뀔 때 대부분의 키를 재분배하면 비효율과 과부하가 발생한다.
 
-## Consistent Hashing
-### Definition
-Consistent hashing ensures that only a fraction of keys are remapped when servers are added or removed. This minimizes disruptions and enhances scalability.
+## 일관 해싱
+### 정의
+일관 해싱은 서버를 추가하거나 제거할 때 일부 키만 다시 매핑되도록 한다. 이를 통해 중단을 최소화하고 확장성을 높인다.
 
-### Key Concepts
-1. **Hash Space and Ring:** The hash space forms a continuous ring, with hash values distributed from `0` to `2^160-1` (e.g., using hash function like SHA-1). By connecting both ends we get a ring.
+### 핵심 개념
+1. **해시 공간과 링:** 해시 공간은 연속적인 링을 이루며, 해시 값은 `0`부터 `2^160-1`까지 분포한다(예: SHA-1 같은 해시 함수 사용). 양 끝을 연결하면 링이 된다.
     <p align="center">
-    <img src="./images/hash-ring.png"  alt="Hash Ring" width="450">
+    <img src="./images/hash-ring.png"  alt="해시 링" width="450">
     </p>
 
-- Using the same hash function f, we map servers based on server IP or name onto the ring.  
+- 동일한 해시 함수 f를 사용하여 서버 IP 또는 이름을 기준으로 서버를 링에 매핑한다.
 
     <p align="center">
-    <img src="./images/server-ring.png"  alt="Server Ring" width="450">
+    <img src="./images/server-ring.png"  alt="서버 링" width="450">
     </p>
 
-1. **Server Lookup**
-- A key's server is determined by traversing clockwise on the ring until a server is found.
+1. **서버 조회**
+- 링을 시계 방향으로 순회하다가 서버를 찾으면 해당 키의 서버로 결정한다.
 
   <p align="center">
-  <img src="./images/server-lookup.png"  alt="Server Lookup" width="450">
+  <img src="./images/server-lookup.png"  alt="서버 조회" width="450">
   </p>
 
-2. **Adding and Removing Servers**
-- Adding a server redistributes only nearby keys. Only a fraction of keys are redistributed to the new server.
+2. **서버 추가 및 제거**
+- 서버를 추가하면 인접한 키만 재분배된다. 일부 키만 새 서버로 재분배된다.
   
   <p align="center">
-  <img src="./images/adding-server.png"  alt="Adding Server" width="450">
+  <img src="./images/adding-server.png"  alt="서버 추가" width="450">
   </p>
 
-- Removing a server affects only the keys in its range. Only keys from the removed server are reassigned to the next server clockwise.
+- 서버를 제거하면 해당 서버의 범위에 있는 키만 영향을 받는다. 제거된 서버의 키만 시계 방향의 다음 서버에 다시 할당된다.
 
   <p align="center">
-  <img src="./images/removing-server.png"  alt="Removing Server" width="450">
+  <img src="./images/removing-server.png"  alt="서버 제거" width="450">
   </p>
 
-## Challenges and Solutions
-### Two Issues in Basic Approach
-1. **Uneven Partition Sizes:** Servers may have unequal data partitions.
-2. **Non-uniform Key Distribution:** Some servers may receive significantly more keys than others.
+## 과제와 해결책
+### 기본 접근법의 두 가지 문제
+1. **불균등한 파티션 크기:** 서버마다 데이터 파티션의 크기가 다를 수 있다.
+2. **불균일한 키 분포:** 일부 서버가 다른 서버보다 훨씬 많은 키를 받을 수 있다.
 
-### Solution: Virtual Nodes
-- Each server is represented by multiple virtual nodes on the ring uniformly distrubuted on the ring.
-- Virtual nodes improve key distribution and balance load. As the number of virtual nodes increases, the distribution of keys       becomes more balanced. This is because the standard deviation gets smaller with more virtual nodes, leading to balanced data distribution.
+### 해결책: 가상 노드
+- 각 서버는 링에 균일하게 분포된 여러 가상 노드로 표현된다.
+- 가상 노드는 키 분포를 개선하고 부하의 균형을 맞춘다. 가상 노드 수가 증가할수록 키 분포의 균형이 향상된다. 가상 노드가 많아질수록 표준 편차가 작아져 데이터가 균형 있게 분포되기 때문이다.
    
   <p align="center">
-  <img src="./images/virtual-nodes.png"   alt="Virtual Nodes" width="450">
+  <img src="./images/virtual-nodes.png"   alt="가상 노드" width="450">
   </p>
 
-## Affected Keys
-When servers are added or removed:
-- **Added Server:** Affected keys are those between the new server and its predecessor.
-  In the following example server 4 is added onto the ring. The affected range starts from s4 (newly
-  added node) and moves anticlockwise around the ring until a server is found (s3). Thus, keys
-  located between s3 and s4 need to be redistributed to s4.
+## 영향을 받는 키
+서버를 추가하거나 제거할 때 다음 키가 영향을 받는다.
+- **추가된 서버:** 새 서버와 그 이전 서버 사이의 키가 영향을 받는다.
+  다음 예시에서는 서버 4가 링에 추가된다. 영향을 받는 범위는 s4(새로 추가된 노드)에서 시작해 서버(s3)를 찾을 때까지 링을 반시계 방향으로 이동한다. 따라서 s3와 s4 사이에 있는 키를 s4로 재분배해야 한다.
 
   <p align="center">
-  <img src="./images/server-addition.png"   alt="Server Addition" width="450">
+  <img src="./images/server-addition.png"   alt="서버 추가" width="450">
   </p>
 
-- **Removed Server:** Affected keys are those between the removed server and its predecessor. In the following example when a server (s1) is removed, the affected range starts from s1
-(removed node) and moves anticlockwise around the ring until a server is found (s0). Thus, keys located between s0 and s1 must be redistributed to s2.
+- **제거된 서버:** 제거된 서버와 그 이전 서버 사이의 키가 영향을 받는다. 다음 예시에서 서버(s1)를 제거하면 영향을 받는 범위는 s1(제거된 노드)에서 시작해 서버(s0)를 찾을 때까지 링을 반시계 방향으로 이동한다. 따라서 s0과 s1 사이에 있는 키를 s2로 재분배해야 한다.
    
   <p align="center">
-  <img src="./images/server-removed.png"   alt="Server Removed" width="450">
+  <img src="./images/server-removed.png"   alt="서버 제거" width="450">
   </p>
 
-## Benefits of Consistent Hashing
-- **Minimized Redistribution:** Only a fraction of keys are reassigned.
-- **Scalability:** Enables horizontal scaling.
-- **Mitigates Hotspots:** Balances data distribution to avoid server overload.
+## 일관 해싱의 장점
+- **재분배 최소화:** 일부 키만 다시 할당한다.
+- **확장성:** 수평 확장을 가능하게 한다.
+- **핫스팟 완화:** 데이터 분포의 균형을 맞춰 서버 과부하를 방지한다.
 
-## Real-World Applications
+## 실제 적용 사례
 - Amazon Dynamo DB
 - Apache Cassandra
 - Discord
 - Akamai CDN
-- Maglev Load Balancer
-
+- Maglev 로드 밸런서

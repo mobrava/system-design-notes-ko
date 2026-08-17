@@ -1,129 +1,129 @@
-# Chapter 16: Proximity Service
+# 16장: 근접성 서비스
 
-## Introduction
-A **proximity service** is designed to find nearby locations, such as restaurants, hotels, gas stations, and other businesses. This functionality is used in applications like **Google Maps** and **Yelp** to help users discover places within a defined radius.
+## 소개
+**근접성 서비스**는 음식점, 호텔, 주유소 및 기타 사업체처럼 가까운 장소를 찾는 서비스다. **Google Maps**와 **Yelp** 같은 애플리케이션은 사용자가 지정된 반경 안의 장소를 찾을 수 있도록 이 기능을 사용한다.
 
 
-## Step 1: Understanding the Problem and Establishing Scope
+## 1단계: 문제 이해와 범위 설정
 
-### **Functional Requirements**
-1. **Search for businesses** based on user location (latitude, longitude) and search radius.
-2. **Allow business owners** to add, update, or delete businesses (not real-time).
-3. **Provide detailed business information** when requested.
+### **기능 요구사항**
+1. 사용자 위치(위도, 경도)와 검색 반경을 기준으로 **사업체를 검색**한다.
+2. **사업체 소유자**가 사업체를 추가, 업데이트 또는 삭제할 수 있게 한다(실시간으로 반영할 필요는 없다).
+3. 요청 시 **사업체 상세 정보**를 제공한다.
 
-### **Non-Functional Requirements**
-- **Low latency**: Users should get quick responses.
-- **Data privacy**: Compliance with GDPR and CCPA regulations.
-- **High availability**: Handle peak-hour spikes in busy locations.
+### **비기능 요구사항**
+- **낮은 지연 시간**: 사용자가 빠르게 응답을 받아야 한다.
+- **데이터 프라이버시**: GDPR과 CCPA 규정을 준수한다.
+- **고가용성**: 혼잡한 장소의 피크 시간대 급증을 처리한다.
 
-### **Back-of-the-Envelope Estimation**
-- **100 million daily active users**.
-- **200 million businesses** in the system.
-- **Search QPS Calculation**:
-  - Users make **5 searches per day**.
-  - **Search QPS** = (100M × 5) / 86,400 ≈ **5,000 QPS**.
+### **개략적 추정**
+- **일간 활성 사용자 1억 명**.
+- 시스템에 **2억 개의 사업체**가 있다.
+- **검색 QPS 계산**:
+  - 사용자는 **하루에 5번 검색**한다.
+  - **검색 QPS** = (100M × 5) / 86,400 ≈ **5,000 QPS**.
 
 ---
 
-## Step 2: High-Level Design
+## 2단계: 개략적 설계
 
-### **API Design**
-#### **Search Nearby Businesses**
+### **API 설계**
+#### **주변 사업체 검색**
 GET /v1/search/nearby
 
-- **Request Parameters**:
-  - `latitude`: User’s location latitude.
-  - `longitude`: User’s location longitude.
-  - `radius`: Search radius (default: 5000m).
+- **요청 매개변수**:
+  - `latitude`: 사용자 위치의 위도.
+  - `longitude`: 사용자 위치의 경도.
+  - `radius`: 검색 반경(기본값: 5000m).
 
-#### **Business APIs**
-| API Endpoint                     | Description                                      |
+#### **사업체 API**
+| API 엔드포인트                     | 설명                                      |
 |-----------------------------------|--------------------------------------------------|
-| `GET /v1/businesses/{id}`         | Fetch detailed business info                    |
-| `POST /v1/businesses`             | Add a new business                              |
-| `PUT /v1/businesses/{id}`         | Update business details                         |
-| `DELETE /v1/businesses/{id}`      | Remove a business from the system               |
+| `GET /v1/businesses/{id}`         | 사업체 상세 정보 조회                    |
+| `POST /v1/businesses`             | 새 사업체 추가                              |
+| `PUT /v1/businesses/{id}`         | 사업체 상세 정보 업데이트                         |
+| `DELETE /v1/businesses/{id}`      | 시스템에서 사업체 제거               |
 
 
-### **Data Model**
-- Since the read volume is high because two features are very commonly used, a realtional database such as MySQL is a good fit.
-  - Search for nearby businesses
-  - View the detailed information of a business
+### **데이터 모델**
+- 다음 두 기능이 매우 흔하게 사용되어 읽기 작업량이 많으므로 MySQL과 같은 관계형 데이터베이스가 적합하다.
+  - 주변 사업체 검색
+  - 사업체 상세 정보 조회
 
-### **Data Schema**
-- Key Database tables are the business table and the geospatial index table
-- The business table consists the detailed information about a business.
+### **데이터 스키마**
+- 핵심 데이터베이스 테이블은 사업체 테이블과 지리 공간 인덱스 테이블이다.
+- 사업체 테이블은 사업체에 관한 상세 정보로 구성된다.
 
-### **High-Level System Architecture**
-The system comprises of two parts: Location based service (LBS) and business related service.
+### **개략적 시스템 아키텍처**
+시스템은 위치 기반 서비스(Location-Based Service, LBS)와 사업체 관련 서비스라는 두 부분으로 구성된다.
 
 <div style="margin-left:3rem">
     <img src="./images/high-level-design.png" alt="HLD" width="400" />
 </div>
 
-- **Location-Based Service (LBS)**: 
-  - Processes location-based search queries.
-  - Read-heavy service with no write requests.
-  - QPS is high especially during peak hours in dense areas and the system is stateless.
-- **Business Service**: Deals with two types of requests.
-  - Business owners create, update or delete businesses.
-  - Customers view detailed information about a business.
-- **Load Balancer**: Routes traffic to LBS and Business service.
-- **Database Cluster**: 
-  - Uses **primary-replica architecture** for read-heavy workloads.
-  - There might be some discrepancy between data read b/w data read by LBS and data written by by primary database.
-  - This incosistency is not an issue beacuase the business information is not updated in real-time.
+- **위치 기반 서비스(LBS)**:
+  - 위치 기반 검색 쿼리를 처리한다.
+  - 쓰기 요청이 없는 읽기 중심 서비스다.
+  - 특히 밀집 지역의 피크 시간대에는 QPS가 높으며 시스템은 무상태다.
+- **사업체 서비스**: 두 가지 유형의 요청을 처리한다.
+  - 사업체 소유자가 사업체를 생성, 업데이트 또는 삭제한다.
+  - 고객이 사업체 상세 정보를 조회한다.
+- **로드 밸런서**: 트래픽을 LBS와 사업체 서비스로 라우팅한다.
+- **데이터베이스 클러스터**:
+  - 읽기 중심 워크로드에 **프라이머리-복제본 아키텍처**를 사용한다.
+  - LBS가 읽은 데이터와 프라이머리 데이터베이스에 기록된 데이터 사이에 일부 불일치가 있을 수 있다.
+  - 사업체 정보는 실시간으로 업데이트되지 않으므로 이러한 불일치는 문제가 되지 않는다.
 
 
 ---
 
-## Step 3: Algorithms for Fetching Nearby Businesses
+## 3단계: 주변 사업체 조회 알고리즘
 
-### **Option 1: Two-Dimensional Search (Naive Approach)**
+### **선택지 1: 2차원 검색(단순 접근 방식)**
 
 <div style="margin-left:3rem">
     <img src="./images/2d-search.png" alt="2D" width="250" />
 </div>
 
-The most intuitive way is to draw a circle with pre-defined radius and find all the businesses within the circle.
+가장 직관적인 방법은 미리 정의한 반경으로 원을 그리고 원 안의 모든 사업체를 찾는 것이다.
 
-**SQL Query:**
+**SQL 쿼리:**
 ```
 SELECT business_id, latitude, longitude
 FROM business
 WHERE (latitude BETWEEN :lat - radius AND :lat + radius)
 AND (longitude BETWEEN :long - radius AND :long + radius);
 ```
-**Problems:**
-- **Inefficient**: Requires scanning the entire database.
-- **Limited by one-dimensional indexes** (latitude/longitude).
+**문제점:**
+- **비효율적**: 전체 데이터베이스를 스캔해야 한다.
+- **1차원 인덱스의 한계가 있다**(위도/경도).
 
-A potiential improvement is to build index on logitude and latitude columns, alhtough this is slighlty better but still vry slow.
+경도와 위도 열에 인덱스를 구축하면 조금 개선할 수 있지만, 그래도 여전히 매우 느리다.
 
-### Better Approach
-- The problem with last approach is that the database index can only increase search speed in one dimension.
-- An optimal apporach is to reprsent the two-dimensional data into one dimension using geospatial indexing.
-  - Hash: Even grid, Geo Hash
-  - Tree: Quadtree, Google S2, RTree
+### 더 나은 접근 방식
+- 앞선 접근 방식의 문제는 데이터베이스 인덱스가 한 차원에서만 검색 속도를 높일 수 있다는 점이다.
+- 최적의 접근 방식은 지리 공간 인덱싱을 사용해 2차원 데이터를 1차원으로 표현하는 것이다.
+  - 해시: 균등 그리드, Geohash
+  - 트리: Quadtree, Google S2, RTree
 
   <div style="margin-left:3rem">
     <img src="./images/geospatial-index-types.png" alt="2D" width="500" />
   </div>
 
 
-### **Option 2: Evenly Divided Grid**
+### **선택지 2: 균등 분할 그리드**
 
   <div style="margin-left:3rem">
-    <img src="./images/even-grid.png" alt="Even Grid" width="400" />
+    <img src="./images/even-grid.png" alt="균등 그리드" width="400" />
   </div>
 
-- **Divides the world into fixed-size grids**.
-- **Issue**: Uneven business distribution (high density in cities, sparse in rural areas).
+- **세계를 고정 크기 그리드로 나눈다**.
+- **문제점**: 사업체가 불균등하게 분포한다(도시는 밀도가 높고 농촌 지역은 희박하다).
 
-### **Option 3: Geohash**
-- Divide the planet into four quadrants along with the prime meridian and equator. And then divide each grid into four smaller grids. 
-- Each grids can be represented by altering b/w longitude and latitude bit.
-- Repeat this subdivision
+### **선택지 3: Geohash**
+- 본초 자오선과 적도를 따라 지구를 네 개의 사분면으로 나눈다. 그런 다음 각 그리드를 더 작은 네 개의 그리드로 나눈다.
+- 각 그리드는 경도 비트와 위도 비트를 번갈아 사용해 표현할 수 있다.
+- 이 세분화를 반복한다.
 
   <div style="margin-left:3rem">
     <img src="./images/geohash.png" alt="Geohash" width="300" />
@@ -131,185 +131,183 @@ A potiential improvement is to build index on logitude and latitude columns, alh
   </div>
 
 
-- **Encodes latitude and longitude into a single alphanumeric string**. It has 12 precisions (levels)
-- **Hierarchical grid structure** allows for efficient searching.
-- The right precision is chosen by using the minimal geohash length according to the table.
+- **위도와 경도를 하나의 영숫자 문자열로 인코딩한다**. 정밀도(레벨)는 12단계다.
+- **계층적 그리드 구조**를 통해 효율적으로 검색할 수 있다.
+- 표에 따라 최소 Geohash 길이를 사용해 적절한 정밀도를 선택한다.
   <div style="margin-left:3rem">
-    <img src="./images/geohash-radius-mapping.png" alt="Geohash Radius" width="400" />
+    <img src="./images/geohash-radius-mapping.png" alt="Geohash 반경" width="400" />
   </div>
-- Geohash guarantees that the longer a shared prefix is between two geohashes, the closer they are.
+- 두 Geohash가 공유하는 접두사가 길수록 두 위치가 서로 더 가깝다.
 
-- **Challenges**:
+- **문제점**:
   <div style="margin-left:3rem">
-    <img src="./images/boundary-issue.png" alt="Boundary Issue" width="300" />
+    <img src="./images/boundary-issue.png" alt="경계 문제" width="300" />
   </div>
 
-  - **Boundary issues** (businesses close to grid edges may get excluded).
-    - Two locations can be very close but have no shared prefix at all (can be on other side of equator)
-    - Two locations can have a long shared prefix but belong to different geohashes.
-  - Solution: Need to search neighboring grids.
+  - **경계 문제**(그리드 가장자리와 가까운 사업체가 제외될 수 있다).
+    - 두 위치가 매우 가까워도 공유하는 접두사가 전혀 없을 수 있다(적도를 사이에 두고 반대쪽에 있을 수 있다).
+    - 두 위치가 긴 접두사를 공유하면서도 서로 다른 Geohash에 속할 수 있다.
+  - 해결책: 인접 그리드도 검색해야 한다.
 
 
-### **Option 4: Quadtree**
+### **선택지 4: Quadtree**
 
-  A quadtree is a tree data structure that recursively divides a two-dimensional space into four quadrants, with each internal node having exactly four children, representing the four sub-regions of the space.
-  - The quadtree is an in-memory data structure and it runs on each LBS server and built on server startup time.
+  Quadtree는 2차원 공간을 네 개의 사분면으로 재귀적으로 나누는 트리 자료 구조다. 각 내부 노드는 공간의 네 하위 영역을 나타내는 자식을 정확히 네 개 갖는다.
+  - Quadtree는 인메모리 자료 구조이며, 각 LBS 서버에서 실행되고 서버 시작 시 구축된다.
 
   <div style="margin-left:3rem">
     <img src="./images/quadtree.png" alt="Quadtree" width="500" />
   </div>
 
-  - The root node is recursively broken down into 4 quadrants until no nodes are left with more than x number of businesses (100 in this case).
+  - 사업체가 x개(여기서는 100개)를 초과하는 노드가 남지 않을 때까지 루트 노드를 네 개의 사분면으로 재귀적으로 분할한다.
 
   <div style="margin-left:3rem">
-    <img src="./images/building-quadtree.png" alt="Building Quadtree" width="500" />
+    <img src="./images/building-quadtree.png" alt="Quadtree 구축" width="500" />
   </div>
 
-- The quadtree index doen't take too much memory (typically in GBs) and can easily fit in one server.
-- Since tge time complexity to build the tree is nlogn, it might take a few minutes to build the tree.
-- **Efficient for k-nearest search queries** (e.g., find the closest gas station).
+- Quadtree 인덱스는 메모리를 많이 사용하지 않으며(일반적으로 수 GB) 단일 서버에 쉽게 들어간다.
+- 트리 구축의 시간 복잡도가 nlogn이므로 트리를 구축하는 데 몇 분이 걸릴 수 있다.
+- **k-최근접 검색 쿼리에 효율적이다**(예: 가장 가까운 주유소 찾기).
 
   <div style="margin-left:3rem">
-    <img src="./images/realworld-quadtree.png" alt="Real World Quadtree" width="400" />
+    <img src="./images/realworld-quadtree.png" alt="실제 환경의 Quadtree" width="400" />
   </div>
 
-#### Operational considerations
- - For around 200 million businesses, it might take few minutes to build a quadtree at the server start time.
- - While the quadtree is built it cannot serve traffic, therefore a new release should be rolled out incrementally to a subset of servers.
- - When updating a business or adding a new the easiest approach is to incrementally rebuild the quadtree. (Leading to a lot of cache invalidation)
- - Also possible to update the quadtree on the fly but more complex to implement. (Needs locking mechanism)
+#### 운영 고려 사항
+ - 약 2억 개의 사업체가 있다면 서버 시작 시 Quadtree를 구축하는 데 몇 분이 걸릴 수 있다.
+ - Quadtree를 구축하는 동안에는 트래픽을 처리할 수 없으므로 새 릴리스를 일부 서버부터 점진적으로 배포해야 한다.
+ - 사업체를 업데이트하거나 새로 추가할 때 가장 쉬운 접근 방식은 Quadtree를 점진적으로 재구축하는 것이다(많은 캐시 무효화가 발생한다).
+ - Quadtree를 즉시 업데이트할 수도 있지만 구현이 더 복잡하다(잠금 메커니즘이 필요하다).
 
-### **Option 5: Google S2**
-It maps a sphere to a !D index based on Hilbert curve.Two points that are close to each other on the Hilbert curve are close in 1D space.
+### **선택지 5: Google S2**
+구를 힐베르트 곡선(Hilbert curve) 기반의 1D 인덱스에 매핑한다. 힐베르트 곡선에서 서로 가까운 두 점은 1D 공간에서도 가깝다.
 
 
   <div style="margin-left:3rem">
-    <img src="./images/hilbert-curve.png" alt="Hilbert curve" width="300" />
-    <img src="./images/geofence.png" alt="Geofence" width="355" />
+    <img src="./images/hilbert-curve.png" alt="힐베르트 곡선" width="300" />
+    <img src="./images/geofence.png" alt="지오펜스" width="355" />
   </div>
 
-- **Divides the earth into small cells using a Hilbert curve**.
-- Great for geofencing becuase it can cover arbitrary areas with varying levels.
-- Geofencing also allows to define parameters that surround the area of interest.
-- Aother advantage if instead of having a fixed level of precision, we can specify min,max level and max cells in S2.
+- **힐베르트 곡선을 사용해 지구를 작은 셀로 나눈다**.
+- 서로 다른 레벨을 사용해 임의의 영역을 포괄할 수 있으므로 지오펜싱에 적합하다.
+- 지오펜싱을 사용하면 관심 영역을 둘러싸는 경계도 정의할 수 있다.
+- 또 다른 장점은 정밀도 레벨을 고정하는 대신 S2에서 최소 레벨, 최대 레벨, 최대 셀 수를 지정할 수 있다는 점이다.
 
 
-## Tradeoff Comparison 
+## 트레이드오프 비교
 
 #### Geohash
-- Easy to use and implement- No need to build/rebuild a tree
-- Supports fixed radius results
-- Updating the index is easy.
-- Cannot dynamically adjust the grid size based on population density.
+- 사용 및 구현이 쉽고 트리를 구축하거나 재구축할 필요가 없다.
+- 고정 반경 검색 결과를 지원한다.
+- 인덱스를 쉽게 업데이트할 수 있다.
+- 인구 밀도에 따라 그리드 크기를 동적으로 조정할 수 없다.
 
 #### Quadtree
-- Slightly harder to implement.
-- Supports fetching k-nearest businesses.
-- Can dynamically adjust the grid size based on population desnsity.
-- Updating the index is more complicated as might need to rebuild the whole tree.
+- 구현이 조금 더 어렵다.
+- k-최근접 사업체 조회를 지원한다.
+- 인구 밀도에 따라 그리드 크기를 동적으로 조정할 수 있다.
+- 전체 트리를 재구축해야 할 수 있으므로 인덱스 업데이트가 더 복잡하다.
 
 ---
 
-## Step 4: Scaling the Database and Caching Strategy
+## 4단계: 데이터베이스 확장과 캐싱 전략
 
-### **Scaling the Business Table**
-- **Sharding by business ID** ensures even data distribution.
-- We have separate rows for each business in the table.
+### **사업체 테이블 확장**
+- **사업체 ID 기반 샤딩**으로 데이터를 고르게 분산한다.
+- 테이블에서 각 사업체를 별도의 행으로 저장한다.
 
-| Geohash | Business ID |
+| Geohash | 사업체 ID |
 |---------|------------|
 | 9q9hvu  | 343        |
 | 9q9hvu  | 347        |
 | 9q9hvu  | 112        |
 
-### **Scaling the Geospatial Index**
-- Might not be a good fit for the geohash table. In this case everything can fit in a single server so there's no tehcnical reason for sharding.
-- A better approach is to have read-replicas to help with read loads.
+### **지리 공간 인덱스 확장**
+- Geohash 테이블에는 샤딩이 적합하지 않을 수 있다. 이 경우 모든 데이터가 단일 서버에 들어가므로 샤딩해야 할 기술적 이유가 없다.
+- 읽기 부하를 처리하는 데 읽기 복제본을 사용하는 것이 더 나은 접근 방식이다.
 
 
 
 ---
 
-### **Cache Strategy**
-The most obvious cache key choice is the location coordinate, however it has a few issues:
- - Location coordinates from gps are not accurate.
- - A user can move casuing the location coordinate to change.
- - A better key is the geohash.
+### **캐시 전략**
+가장 명백한 캐시 키 후보는 위치 좌표지만 몇 가지 문제가 있다.
+ - GPS로 얻은 위치 좌표는 정확하지 않다.
+ - 사용자가 이동하면 위치 좌표가 바뀔 수 있다.
+ - Geohash가 더 나은 키다.
 
-| Cache Key  | Cache Value |
+| 캐시 키  | 캐시 값 |
 |------------|------------|
-| `geohash`  | List of business IDs in that grid |
-| `business_id` | Business details (name, address, reviews, etc.) |
+| `geohash`  | 해당 그리드의 사업체 ID 목록 |
+| `business_id` | 사업체 상세 정보(이름, 주소, 리뷰 등) |
 
 ---
 
-## Step 5: Deployment Strategy and Final Architecture
+## 5단계: 배포 전략과 최종 아키텍처
 
-### **Region and Availability Zones**
-- Deploy LBS and Business Service **across multiple regions**.
+### **리전과 가용 영역**
+- LBS와 사업체 서비스를 **여러 리전에 걸쳐** 배포한다.
 
-### **Handling Real-Time Updates**
-- **Business updates are batch processed daily**.
+### **실시간 업데이트 처리**
+- **사업체 업데이트는 매일 배치 처리한다**.
 
-### **Final System Architecture**
+### **최종 시스템 아키텍처**
 
 
   <div style="margin-left:3rem">
-    <img src="./images/final-design.png" alt="Final Design" width="500" />
+    <img src="./images/final-design.png" alt="최종 설계" width="500" />
   </div>
 
 
-This final algorithm looks like this:
+최종 알고리즘은 다음과 같다.
 
-## Steps to Retrieve Nearby Businesses
-1. **User Request:**  
-   - A user searches for restaurants within **500 meters**.  
-   - The client sends **latitude (37.776720), longitude (-122.416730), and radius (500m)** to the **load balancer**.
+## 주변 사업체 조회 단계
+1. **사용자 요청:**
+   - 사용자가 **500미터** 이내의 음식점을 검색한다.
+   - 클라이언트가 **위도(37.776720), 경도(-122.416730), 반경(500m)**을 **로드 밸런서**에 보낸다.
 
-2. **Request Forwarding:**  
-   - The **load balancer (LB)** forwards the request to the **Location-Based Service (LBS)**.
+2. **요청 전달:**
+   - **로드 밸런서(LB)**가 요청을 **위치 기반 서비스(LBS)**로 전달한다.
 
-3. **Geohash Calculation:**  
-   - LBS determines the **geohash length** matching the radius.  
-   - Using a reference table, **500m corresponds to geohash length = 6**.
+3. **Geohash 계산:**
+   - LBS가 반경에 맞는 **Geohash 길이**를 결정한다.
+   - 참조 표에 따르면 500m는 **geohash length = 6**에 해당한다.
 
-4. **Fetching Neighboring Geohashes:**  
-   - LBS calculates **neighboring geohashes** to include nearby areas.  
-   - The result is a list:  
+4. **인접 Geohash 가져오기:**
+   - LBS가 주변 영역을 포함하도록 **인접 Geohash**를 계산한다.
+   - 결과는 다음 목록이다.
      ```
      [my_geohash, neighbor1_geohash, neighbor2_geohash, ..., neighbor8_geohash]
      ```
 
-5. **Fetching Business IDs from Redis:**  
-   - For each geohash in the list, LBS queries the **Geohash Redis server** to fetch **business IDs**.  
-   - Parallel queries are used to minimize latency.
+5. **Redis에서 사업체 ID 가져오기:**
+   - LBS가 목록의 각 Geohash에 대해 **Geohash Redis 서버**를 쿼리하여 **사업체 ID**를 가져온다.
+   - 지연 시간을 최소화하기 위해 병렬 쿼리를 사용한다.
 
-6. **Retrieving & Ranking Businesses:**  
-   - LBS fetches **full business details** from the **Business Info Redis server**.  
-   - Businesses are **sorted by distance** from the user’s location.  
-   - The **ranked results** are sent back to the client.
+6. **사업체 조회 및 순위 지정:**
+   - LBS가 **사업체 정보 Redis 서버**에서 **전체 사업체 상세 정보**를 가져온다.
+   - 사용자 위치로부터의 **거리순으로 사업체를 정렬**한다.
+   - **정렬된 결과**를 클라이언트에 반환한다.
 
-## Key Optimizations
-- **Parallel Redis Calls**: Reduces response time.  
-- **Geohash Indexing**: Ensures efficient spatial queries.  
-- **Caching**: Speeds up lookup and retrieval of business data.  
+## 핵심 최적화
+- **병렬 Redis 호출**: 응답 시간을 줄인다.
+- **Geohash 인덱싱**: 효율적인 공간 쿼리를 보장한다.
+- **캐싱**: 사업체 데이터의 검색과 조회 속도를 높인다.
 
-This method ensures **low-latency, scalable** retrieval of businesses near a user’s location.
+이 방법을 사용하면 사용자 위치 주변의 사업체를 **낮은 지연 시간으로 조회**할 수 있으며 시스템을 확장할 수 있다.
 
 ---
 
-### **Choosing the Best Indexing Method**
-| Indexing Method | Pros | Cons |
+### **최적의 인덱싱 방법 선택**
+| 인덱싱 방법 | 장점 | 단점 |
 |----------------|------|------|
-| **Geohash** | Easy to implement, efficient for proximity search | Boundary issues, fixed grid size |
-| **Quadtree** | Dynamically adjusts to density, supports k-nearest queries | More complex, requires tree rebalancing |
-| **Google S2** | Advanced geofencing, used in Google Maps | Harder to implement |
+| **Geohash** | 구현하기 쉽고 근접 검색에 효율적이다 | 경계 문제가 있고 그리드 크기가 고정된다 |
+| **Quadtree** | 밀도에 따라 동적으로 조정되며 k-최근접 쿼리를 지원한다 | 더 복잡하고 트리 재조정이 필요하다 |
+| **Google S2** | 고급 지오펜싱을 제공하며 Google Maps에서 사용한다 | 구현하기 더 어렵다 |
 
 ---
 
-## References
-1. [Geohash Algorithm](https://www.movable-type.co.uk/scripts/geohash.html)
-2. [Quadtree Indexing](https://en.wikipedia.org/wiki/Quadtree)
-3. [Google S2 Geometry](https://s2geometry.io/)
-
-
+## 참고 자료
+1. [Geohash 알고리즘](https://www.movable-type.co.uk/scripts/geohash.html)
+2. [Quadtree 인덱싱](https://en.wikipedia.org/wiki/Quadtree)
+3. [Google S2 기하학](https://s2geometry.io/)

@@ -1,230 +1,228 @@
-# Chapter 15: Design Google Drive
+# 15장: Google Drive 설계
 
-## Introduction
-Google Drive is a cloud-based file storage and synchronization service that allows users to store, access, and share files from various devices. This chapter discusses designing a scalable system with the following features:
-- **File Upload and Download**
-- **File Sync Across Devices**
-- **File Sharing**
-- **File Revision History**
-- **Notifications for Edits, Deletes, and Shares**
-
----
-
-## Step 1: Understanding the Problem
-
-### Key Requirements
-#### Functional Requirements:
-- Upload and download files.
-- Sync files across multiple devices.
-- Maintain file revisions.
-- Enable file sharing with permissions.
-- Send notifications on file edits, deletions, and shares.
-
-#### Non-Functional Requirements:
-- **Reliability:** Data loss is unacceptable.
-- **Fast Sync Speed:** Avoid user impatience with delayed syncing.
-- **Bandwidth Efficiency:** Minimize unnecessary data usage.
-- **Scalability:** Handle 10 million daily active users (DAU).
-- **High Availability:** Operate seamlessly during server failures or network issues.
-
-### Constraints and Assumptions
-- Users get **10 GB free space**.
-- Maximum file size: **10 GB**.
-- Average file upload size: **500 KB**.
-- Upload frequency: **2 files per day per user**.
-- Total storage required: **500 PB**.
+## 소개
+Google Drive는 사용자가 여러 기기에서 파일을 저장하고 접근하며 공유할 수 있게 해 주는 클라우드 기반 파일 저장 및 동기화 서비스다. 이 장에서는 다음 기능을 갖춘 확장 가능한 시스템의 설계를 다룬다.
+- **파일 업로드 및 다운로드**
+- **기기 간 파일 동기화**
+- **파일 공유**
+- **파일 변경 이력**
+- **편집, 삭제, 공유 알림**
 
 ---
 
-## Step 2: High-Level Design
-### Single-Server Setup
-A basic setup includes:
-1. **Web Server:** Handles uploads and downloads.
-2. **Metadata Database:**  to keep track of metadata like user data, login info, files info/
-3. **Storage Directory:** Holds files organized by namespaces.
+## 1단계: 문제 이해
+
+### 핵심 요구사항
+#### 기능 요구사항:
+- 파일을 업로드하고 다운로드한다.
+- 여러 기기에서 파일을 동기화한다.
+- 파일 변경 이력을 유지한다.
+- 권한 기반 파일 공유를 지원한다.
+- 파일 편집, 삭제, 공유 시 알림을 보낸다.
+
+#### 비기능 요구사항:
+- **신뢰성:** 데이터 손실은 허용할 수 없다.
+- **빠른 동기화 속도:** 동기화 지연으로 사용자가 불편을 겪지 않도록 한다.
+- **대역폭 효율성:** 불필요한 데이터 사용을 최소화한다.
+- **확장성:** 일간 활성 사용자(DAU) 1,000만 명을 처리한다.
+- **고가용성:** 서버 장애나 네트워크 문제가 발생해도 중단 없이 동작한다.
+
+### 제약 조건과 가정
+- 사용자에게 **10 GB의 무료 공간**을 제공한다.
+- 최대 파일 크기: **10 GB**.
+- 평균 파일 업로드 크기: **500 KB**.
+- 업로드 빈도: **사용자당 하루 2개 파일**.
+- 필요한 총 저장 공간: **500 PB**.
+
+---
+
+## 2단계: 개략적 설계
+### 단일 서버 구성
+기본 구성은 다음을 포함한다.
+1. **웹 서버:** 업로드와 다운로드를 처리한다.
+2. **메타데이터 데이터베이스:** 사용자 데이터, 로그인 정보, 파일 정보와 같은 메타데이터를 추적한다.
+3. **저장소 디렉터리:** 네임스페이스별로 구성된 파일을 보관한다.
 
 
 <div style="margin-left:3rem">
-    <img src="./images/namespaces.png" alt="Namespaces" width="400" />
+    <img src="./images/namespaces.png" alt="네임스페이스" width="400" />
 </div>
 
-- A web server and a directory called drive/ is set up as the root directory to store uploaded files. 
-- Under drive/ directory, there is a list of directories called namespaces. 
-- Each namespace contains all the uploaded files for that user. 
-- Each file or folder can be uniquely identified by joining the namespace and the relative path.
+- 웹 서버를 구성하고 업로드된 파일을 저장할 루트 디렉터리로 drive/라는 디렉터리를 설정한다.
+- drive/ 디렉터리 아래에는 네임스페이스라는 디렉터리 목록이 있다.
+- 각 네임스페이스는 해당 사용자가 업로드한 모든 파일을 포함한다.
+- 네임스페이스와 상대 경로를 결합하면 각 파일이나 폴더를 고유하게 식별할 수 있다.
 
 
-This design serves as a starting point but is inadequate for scaling.
+이 설계는 출발점으로는 적합하지만 확장하기에는 부족하다.
 
-#### APIs
-1. **Upload a file to Google Drive:** Two types of uploads are supported
-    - Simple upload: Used when file size is small.
-    - Resumable upload: 
-        - Endpoint: https://api.example.com/files/upload?uploadType=resumable
-        - Send the initial request to retrieve the resumable URL.
-        - Upload the data and monitor upload state
-        - If upload is disturbed, resume the upload.
-2. **Download a file from Google Drive:** To download a file
-    -  Endpoint: https://api.example.com/files/download
-3. **Get file revisions:**
-    - Endpoint: https://api.example.com/files/list_revisions
+#### API
+1. **Google Drive에 파일 업로드:** 두 가지 업로드 유형을 지원한다.
+    - 단순 업로드: 파일 크기가 작을 때 사용한다.
+    - 재개 가능한 업로드:
+        - 엔드포인트: https://api.example.com/files/upload?uploadType=resumable
+        - 재개 가능한 URL을 받기 위한 최초 요청을 보낸다.
+        - 데이터를 업로드하고 업로드 상태를 모니터링한다.
+        - 업로드가 중단되면 업로드를 재개한다.
+2. **Google Drive에서 파일 다운로드:** 파일을 다운로드한다.
+    -  엔드포인트: https://api.example.com/files/download
+3. **파일 변경 이력 조회:**
+    - 엔드포인트: https://api.example.com/files/list_revisions
 
-### Moving to Distributed Systems
+### 분산 시스템으로 전환
 
-#### Improvements:
-1. **Sharding:** Split storage across servers based on `user_id`.
-2. **Amazon S3:** Use S3 for scalable and redundant file storage with cross-region replication.
+#### 개선 사항:
+1. **샤딩:** `user_id`를 기준으로 저장소를 여러 서버에 분할한다.
+2. **Amazon S3:** 리전 간 복제를 통해 확장 가능하고 중복성을 갖춘 파일 저장소로 S3를 사용한다.
 
-    <img src="./images/replication.png" alt="Replication" width="600" />
-     
-3. **Load Balancer:** Distribute traffic across multiple web servers.
-4. **Metadata Database Replication:** Ensure availability through database sharding and replication.
+    <img src="./images/replication.png" alt="복제" width="600" />
+
+3. **로드 밸런서:** 트래픽을 여러 웹 서버에 분산한다.
+4. **메타데이터 데이터베이스 복제:** 데이터베이스 샤딩과 복제를 통해 가용성을 보장한다.
 
 
-#### Sync Conflicts:
-For a large storage system like Google Drive, sync conflicts happen from time to time.
-When two users modify the same file or folder at the same time, a conflict happens.
+#### 동기화 충돌:
+Google Drive와 같은 대규모 저장소 시스템에서는 때때로 동기화 충돌이 발생한다.
+두 사용자가 같은 파일이나 폴더를 동시에 수정하면 충돌이 발생한다.
 
 <div style="margin-left:5rem">
-<img src="./images/sync-conflicts.png" alt="Sync Conflicts" width="600" />
+<img src="./images/sync-conflicts.png" alt="동기화 충돌" width="600" />
 </div>
 
-- In the example user 1 and user 2 tries to update the same file at the same time, but user 1’s file is processed by our system first.
-- User 1’s update operation goes through, but, user 2 gets a sync conflict. 
-- The system presents both copies of the same file: user 2’s local copy and the latest version from the server.
-- User 2 has the option to merge both files or override one version with the other.
+- 예시에서는 사용자 1과 사용자 2가 같은 파일을 동시에 업데이트하려 하지만, 시스템이 사용자 1의 파일을 먼저 처리한다.
+- 사용자 1의 업데이트 작업은 성공하지만 사용자 2에게는 동기화 충돌이 발생한다.
+- 시스템은 동일한 파일의 두 복사본, 즉 사용자 2의 로컬 복사본과 서버의 최신 버전을 모두 제시한다.
+- 사용자 2는 두 파일을 병합하거나 한 버전을 다른 버전으로 덮어쓸 수 있다.
 
-### Improved design
+### 개선된 설계
 <div style="margin-left:5rem">
-<img src="./images/high-level-design.png" alt="High Level Design" width="500" />
+<img src="./images/high-level-design.png" alt="개략적 설계" width="500" />
 </div>
 
-1. **User Interaction:**: Users access the application via browser or mobile app.
+1. **사용자 상호작용:** 사용자는 브라우저나 모바일 앱을 통해 애플리케이션에 접근한다.
 
-2. **Block Servers:**
-   - Files are split into **4 MB blocks** (maximum size) and assigned unique hash values.
-   - Blocks are stored independently in cloud storage (e.g., Amazon S3).
-   - File reconstruction involves joining blocks in a specific order.
+2. **블록 서버:**
+   - 파일을 **4 MB 블록**(최대 크기)으로 분할하고 고유한 해시 값을 할당한다.
+   - 블록을 클라우드 저장소(예: Amazon S3)에 독립적으로 저장한다.
+   - 파일을 재구성할 때는 블록을 특정 순서로 결합한다.
 
-3. **Cloud Storage:** Blocks are stored in cloud storage for scalability and redundancy.
+3. **클라우드 저장소:** 확장성과 중복성을 위해 블록을 클라우드 저장소에 저장한다.
 
-4. **Cold Storage:** Inactive files are moved to cold storage to reduce costs.
+4. **콜드 저장소:** 비용을 줄이기 위해 비활성 파일을 콜드 저장소로 이동한다.
 
-5. **Load Balancer:** Distributes requests evenly among API servers to ensure efficient operation.
+5. **로드 밸런서:** 효율적인 운영을 위해 요청을 API 서버에 고르게 분산한다.
 
-6. **API Servers:**
-   - Handle user authentication, profile management, and file metadata updates.
-   - Manage all non-uploading workflows.
+6. **API 서버:**
+   - 사용자 인증, 프로필 관리, 파일 메타데이터 업데이트를 처리한다.
+   - 업로드 이외의 모든 워크플로를 관리한다.
 
-7. **Metadata Database and Cache:**
-   - Stores metadata for users, files, blocks, and versions.
-   - Frequently accessed metadata is cached for faster retrieval.
+7. **메타데이터 데이터베이스 및 캐시:**
+   - 사용자, 파일, 블록, 버전의 메타데이터를 저장한다.
+   - 자주 접근하는 메타데이터를 캐시하여 더 빠르게 조회한다.
 
-8. **Notification Service:**
-   - A **publisher/subscriber system** that notifies clients about file changes (add, edit, delete).
-   - Ensures clients can pull the latest updates.
+8. **알림 서비스:**
+   - 파일 변경(추가, 편집, 삭제)을 클라이언트에 알리는 **발행-구독 시스템**이다.
+   - 클라이언트가 최신 업데이트를 가져올 수 있도록 한다.
 
-9. **Offline Backup Queue:** Temporarily stores file change information for offline clients to sync when back online.
+9. **오프라인 백업 큐:** 오프라인 클라이언트가 다시 온라인 상태가 되었을 때 동기화할 수 있도록 파일 변경 정보를 임시로 저장한다.
 
 ---
 
-## Step 3: Design Deep Dive
+## 3단계: 상세 설계
 
-### Metadata Database
-A highly simplified is shown below version as it only includes the most important tables and fields.
-#### Schema Design:
-- **User Table:** Stores user profiles and preferences.
-- **File Table:** Maintains file metadata (e.g., size, name, path).
-- **Block Table:** Tracks file blocks for reconstructing files.
-- **File Version Table:** Stores file revision history.
+### 메타데이터 데이터베이스
+가장 중요한 테이블과 필드만 포함한 매우 단순화된 버전을 아래에 나타낸다.
+#### 스키마 설계:
+- **사용자 테이블:** 사용자 프로필과 환경설정을 저장한다.
+- **파일 테이블:** 파일 메타데이터(예: 크기, 이름, 경로)를 유지한다.
+- **블록 테이블:** 파일 재구성을 위해 파일 블록을 추적한다.
+- **파일 버전 테이블:** 파일 변경 이력을 저장한다.
 
 <div style="margin-left:5rem">
-<img src="./images/metadata-database.png" alt="Metadata Database " width="500" />
+<img src="./images/metadata-database.png" alt="메타데이터 데이터베이스 " width="500" />
 </div>
 
 ---
 
-### File Upload Flow
+### 파일 업로드 흐름
 
-1. **File Upload:**
-   - File is split into blocks, compressed, and encrypted by the block server.
-   - Blocks are uploaded to block servers and stored in S3.
-2. **Metadata Upload:**
-   - Client sends metadata to the API server.
-   - Metadata is stored in the database with status `pending`.
-3. **Completion:**
-   - S3 triggers a callback to update the file status to `uploaded`.
-   - Notification service informs relevant users.
+1. **파일 업로드:**
+   - 블록 서버가 파일을 블록으로 분할하고 압축 및 암호화한다.
+   - 블록을 블록 서버에 업로드하고 S3에 저장한다.
+2. **메타데이터 업로드:**
+   - 클라이언트가 API 서버에 메타데이터를 보낸다.
+   - 메타데이터를 `pending` 상태로 데이터베이스에 저장한다.
+3. **완료:**
+   - S3가 콜백을 트리거하여 파일 상태를 `uploaded`로 업데이트한다.
+   - 알림 서비스가 관련 사용자에게 알린다.
 
 
 <div style="margin-left:5rem">
-<img src="./images/upload-flow.png" alt="Upload Flow " width="500" />
+<img src="./images/upload-flow.png" alt="업로드 흐름 " width="500" />
 </div>
 
 
 ---
 
-### File Sync
-1. **Delta Sync:** Transfer only modified blocks instead of the entire file.
+### 파일 동기화
+1. **델타 동기화:** 전체 파일 대신 수정된 블록만 전송한다.
 
     <div style="margin-left:2rem">
-    <img src="./images/delta-sync.png" alt="Delta Sync" width="400" />
+    <img src="./images/delta-sync.png" alt="델타 동기화" width="400" />
     </div>
 
-2. **Compression:** Blocks are compressed using compression algorithms depending on file types. 
-3. **Conflict Resolution:**
-   - First processed version wins.
-   - Conflicting versions are saved separately for user resolution.
+2. **압축:** 파일 유형에 따라 압축 알고리즘을 사용해 블록을 압축한다.
+3. **충돌 해결:**
+   - 먼저 처리된 버전이 우선한다.
+   - 충돌하는 버전은 사용자가 해결할 수 있도록 별도로 저장한다.
 
 <div style="margin-left:5rem">
-<img src="./images/file-sync.png" alt="File Synce " width="400" />
+<img src="./images/file-sync.png" alt="파일 동기화 " width="400" />
 </div>
 
 ---
 
-### File Download Flow
-Download flow is triggered when a file is added or edited elsewhere. There are two ways a client can know:
-- If client A is online while a file is changed by another client, notification service will inform client A.
-- If client A is offline while a file is changed by another client, data will be saved to the cache. When the offline client is online again, it pulls the latest changes.
+### 파일 다운로드 흐름
+다른 클라이언트에서 파일을 추가하거나 편집하면 다운로드 흐름을 트리거한다. 클라이언트가 이를 알 수 있는 방법은 두 가지다.
+- 다른 클라이언트가 파일을 변경할 때 클라이언트 A가 온라인이면 알림 서비스가 클라이언트 A에게 알린다.
+- 다른 클라이언트가 파일을 변경할 때 클라이언트 A가 오프라인이면 데이터를 캐시에 저장한다. 오프라인 클라이언트가 다시 온라인 상태가 되면 최신 변경 사항을 가져온다.
 
-Once a client knows a file is changed, it first requests metadata via API servers, then
-downloads blocks to construct the file.
+클라이언트는 파일이 변경되었음을 알게 되면 먼저 API 서버를 통해 메타데이터를 요청한 다음 블록을 다운로드해 파일을 구성한다.
 
-1. **Trigger:** Notification service informs the client of file updates.
-2. **Metadata Fetch:** Client retrieves updated metadata via API.
-3. **Block Download:** Client downloads updated blocks from block servers and reconstructs the file.
+1. **트리거:** 알림 서비스가 파일 업데이트를 클라이언트에 알린다.
+2. **메타데이터 가져오기:** 클라이언트가 API를 통해 업데이트된 메타데이터를 조회한다.
+3. **블록 다운로드:** 클라이언트가 블록 서버에서 업데이트된 블록을 다운로드하고 파일을 재구성한다.
 
 
 <div style="margin-left:3rem">
-<img src="./images/download-flow.png" alt="Upload Flow " width="600" />
+<img src="./images/download-flow.png" alt="다운로드 흐름 " width="600" />
 </div>
 
 
 ---
 
-### Notification Service
-1. **Purpose:** Keeps clients updated about file changes.
-2. **Mechanism:** Implements **long polling** for asynchronous notifications.
-3. **Example:** When a file is added, edited, or deleted, notifications are pushed to all relevant clients.
+### 알림 서비스
+1. **목적:** 파일 변경 사항을 클라이언트에 지속적으로 알려 준다.
+2. **메커니즘:** 비동기 알림을 위해 **롱 폴링**을 구현한다.
+3. **예시:** 파일을 추가, 편집 또는 삭제하면 관련된 모든 클라이언트에 알림을 푸시한다.
 
 
 ---
 
-### Storage Optimization
-1. **De-duplication:** Remove duplicate blocks at the account level using hash-based comparisons.
-2. **Versioning Strategy:**
-   - Limit the number of saved revisions.
-   - Prioritize recent versions for frequently edited files.
-3. **Cold Storage:** Move rarely accessed files to cheaper storage solutions (e.g., Amazon S3 Glacier).
+### 저장소 최적화
+1. **중복 제거:** 해시 기반 비교를 사용해 계정 수준에서 중복 블록을 제거한다.
+2. **버전 관리 전략:**
+   - 저장하는 변경 이력의 수를 제한한다.
+   - 자주 편집하는 파일은 최신 버전을 우선한다.
+3. **콜드 저장소:** 거의 접근하지 않는 파일을 더 저렴한 저장소 솔루션(예: Amazon S3 Glacier)으로 이동한다.
 
 ---
 
-### Failure Handling
-1. **Load Balancer Failure:** Secondary load balancer becomes active.
-2. **Block Server Failure:** Pending tasks are reassigned to other servers.
-3. **Metadata Database Failure:**
-   - Promote a slave node to master.
-   - Redirect traffic to remaining replicas.
-4. **Cloud Storage Failure:** Use cross-region replication to fetch unavailable files.
-5. **Notification Service Failure:** Clients reconnect to alternative servers.
-
+### 장애 처리
+1. **로드 밸런서 장애:** 보조 로드 밸런서가 활성화된다.
+2. **블록 서버 장애:** 대기 중인 작업을 다른 서버에 재할당한다.
+3. **메타데이터 데이터베이스 장애:**
+   - 슬레이브 노드를 마스터로 승격한다.
+   - 트래픽을 남은 복제본으로 리디렉션한다.
+4. **클라우드 저장소 장애:** 리전 간 복제를 사용해 이용할 수 없는 파일을 가져온다.
+5. **알림 서비스 장애:** 클라이언트가 대체 서버에 다시 연결한다.

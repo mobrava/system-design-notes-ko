@@ -1,150 +1,141 @@
-# Chapter 1: Scale from Zero to Millions of Users
+# 1장: 사용자 0명에서 수백만 명까지 확장
 
-## Introduction
-Scaling a system to support millions of users is a complex, iterative journey requiring refinement and optimization. This chapter outlines how to begin with a single server setup and scale the architecture step by step to handle millions of users.
+## 소개
+수백만 명의 사용자를 지원하도록 시스템을 확장하는 일은 개선과 최적화가 필요한 복잡하고 반복적인 여정이다. 이 장에서는 단일 서버 구성에서 시작하여 수백만 명의 사용자를 처리할 수 있도록 아키텍처를 단계별로 확장하는 방법을 설명한다.
 
 ---
 
-## Section 1: Single Server Setup
-Initially, all components (web app, database, cache) run on a single server. 
+## 1절: 단일 서버 구성
+처음에는 모든 구성 요소(웹 앱, 데이터베이스, 캐시)가 단일 서버에서 실행된다.
 
 <div style="margin-left:3rem">
    <img src="./images/single-server.png" width="400" />
 </div>
 
-### Request Flow
-1. Users access the application via domain names (e.g., `api.mysite.com`), resolved to IP addresses using DNS.
-2. IP address of the web-server is returned to the browser or mobile app.
-3. HTTP requests are sent to the web server, which returns HTML or JSON responses.
+### 요청 흐름
+1. 사용자는 도메인 이름(예: `api.mysite.com`)을 통해 애플리케이션에 접근하며, 도메인 이름은 DNS를 사용해 IP 주소로 변환된다.
+2. 웹 서버의 IP 주소가 브라우저 또는 모바일 앱에 반환된다.
+3. HTTP 요청이 웹 서버로 전송되고, 웹 서버는 HTML 또는 JSON 응답을 반환한다.
 
-### Traffic Sources
-1. **Web Applications:** Use server-side languages (e.g., Python, Java) for business logic and client-side languages (e.g., JavaScript, HTML) for presentation.
-2. **Mobile Applications:** Communicate with the web server using HTTP and JSON for lightweight data exchange.
+### 트래픽 출처
+1. **웹 애플리케이션:** 비즈니스 로직에는 서버 측 언어(예: Python, Java)를, 표현 계층에는 클라이언트 측 언어(예: JavaScript, HTML)를 사용한다.
+2. **모바일 애플리케이션:** 가벼운 데이터 교환을 위해 HTTP와 JSON을 사용하여 웹 서버와 통신한다.
 
 ---
 
-## Section 2: Database Separation
-As the user base grows, the database is moved to a dedicated server to allow independent scaling of web and database tiers.
+## 2절: 데이터베이스 분리
+사용자 기반이 커지면 웹 계층과 데이터베이스 계층을 독립적으로 확장할 수 있도록 데이터베이스를 전용 서버로 옮긴다.
 
 <div style="margin-left:3rem">
    <img src="./images/database.png" width="400" />
 </div>
 
-### Database Choices
+### 데이터베이스 선택지
 
-1. **Relational Databases (SQL):** Structured data stored in tables. Examples: MySQL, PostgreSQL.
-2. **Non-Relational Databases (NoSQL):** Suitable for unstructured data or low-latency requirements. Categories include:
-   - Key-Value Stores
-   - Graph Databases
-   - Column Stores
-   - Document Stores
+1. **관계형 데이터베이스(SQL):** 구조화된 데이터를 테이블에 저장한다. 예: MySQL, PostgreSQL.
+2. **비관계형 데이터베이스(NoSQL):** 비정형 데이터 또는 짧은 지연 시간이 필요한 경우에 적합하다. 다음과 같은 유형이 있다.
+   - 키-값 저장소
+   - 그래프 데이터베이스
+   - 컬럼 저장소
+   - 문서 저장소
 
-- Non-relational databases might be the right choice if:
-   - application requires super-low latency.
-   - data is unstructured, or  there is no relational data.
-   - only need to serialize and deserialize data (JSON, XML, YAML, etc.).
-   - need to store a massive amount of data.
+- 다음과 같은 경우 비관계형 데이터베이스가 적합할 수 있다.
+   - 애플리케이션에 매우 짧은 지연 시간이 필요하다.
+   - 데이터가 비정형이거나 관계형 데이터가 없다.
+   - 데이터의 직렬화와 역직렬화(JSON, XML, YAML 등)만 필요하다.
+   - 막대한 양의 데이터를 저장해야 한다.
 
 ---
 
-## Section 3: Vertical vs Horizontal Scaling
-### Vertical Scaling
-- Adds more resources (CPU, RAM) to existing servers.
-- Limited by hardware constraints and lacks redundancy.
+## 3절: 수직 확장과 수평 확장
+### 수직 확장
+- 기존 서버에 더 많은 자원(CPU, RAM)을 추가한다.
+- 하드웨어 제약이 있고 중복성이 부족하다.
 
-### Horizontal Scaling
-- Adds more servers to the pool, making it more suitable for large-scale systems.
-- A load balancer is used to handle the request routing between the servers.
+### 수평 확장
+- 서버 풀에 더 많은 서버를 추가하므로 대규모 시스템에 더 적합하다.
+- 서버 사이의 요청 라우팅을 처리하기 위해 로드 밸런서를 사용한다.
 ---
 
-## Section 4: Load Balancer
+## 4절: 로드 밸런서
 
 <div style="margin-left:3rem">
    <img src="./images/load-balancer.png" width="400" />
 </div>
 
-A **load balancer** distributes traffic among multiple servers. Benefits include:
-1. Redundancy: If a server goes offline, traffic is rerouted.
-   -  If server 1 goes offline, all the traffic will be routed to server 2.
-2. Scalability: Easily add servers to handle traffic spikes.
-   -  If the website traffic grows rapidly, subsequent servers can be added to handle the additional traffic.
+**로드 밸런서**는 여러 서버에 트래픽을 분산한다. 장점은 다음과 같다.
+1. 중복성: 서버가 오프라인 상태가 되면 트래픽을 다른 서버로 다시 라우팅한다.
+   - 서버 1이 오프라인 상태가 되면 모든 트래픽을 서버 2로 라우팅한다.
+2. 확장성: 트래픽 급증을 처리할 서버를 쉽게 추가할 수 있다.
+   - 웹사이트 트래픽이 빠르게 증가하면 추가 트래픽을 처리하도록 서버를 더 추가할 수 있다.
 
 ---
 
-## Section 5: Database Replication
+## 5절: 데이터베이스 복제
 
 <div style="margin-left:3rem">
    <img src="./images/database-replication.png" width="400" />
 </div>
 
-### Master-Slave Model
-- **Master Database:** Handles write operations.
-   - All the data-modifying commands like insert, delete, or update must be sent to the master database.
-- **Slave Databases:** Handle read operations, improving performance and reliability.
-   - Since the ratio of reads to writes is higher in most applications; thus, the number of slave
-databases in a system is usually larger than the number of master databases.
+### 마스터-슬레이브 모델
+- **마스터 데이터베이스:** 쓰기 작업을 처리한다.
+   - 삽입, 삭제, 갱신과 같이 데이터를 변경하는 모든 명령은 마스터 데이터베이스로 보내야 한다.
+- **슬레이브 데이터베이스:** 읽기 작업을 처리하여 성능과 신뢰성을 높인다.
+   - 대부분의 애플리케이션에서는 쓰기보다 읽기의 비율이 높으므로, 일반적으로 시스템의 슬레이브 데이터베이스 수가 마스터 데이터베이스 수보다 많다.
 
-### Benefits
-1. Improved performance through parallel read operations.
-2. High availability and data reliability through redundancy.
+### 장점
+1. 읽기 작업을 병렬로 수행하여 성능이 향상된다.
+2. 중복성을 통해 높은 가용성과 데이터 신뢰성을 확보한다.
 
 
-### Failure Handling
-- If only one slave database is available and it goes offline, read operations will be directed
-to the master database temporarily.
-- In case multiple slave databases are available, read operations are
-redirected to other healthy slave databases and a new server will replace the old one. 
--  If the master database goes offline, a slave database will be promoted to be the new
-master.
-- In production system the chosen slave database might not be up to date, hence data needs to be updated by running data
-recovery scripts (methods like multi-masters and circular replication could help).
+### 장애 처리
+- 슬레이브 데이터베이스가 하나뿐이고 이 데이터베이스가 오프라인 상태가 되면 읽기 작업을 일시적으로 마스터 데이터베이스로 보낸다.
+- 슬레이브 데이터베이스가 여러 개라면 읽기 작업을 정상인 다른 슬레이브 데이터베이스로 다시 보내고, 새 서버로 기존 서버를 교체한다.
+- 마스터 데이터베이스가 오프라인 상태가 되면 슬레이브 데이터베이스 하나를 새 마스터로 승격한다.
+- 프로덕션 시스템에서는 선택한 슬레이브 데이터베이스가 최신 상태가 아닐 수 있으므로 데이터 복구 스크립트를 실행해 데이터를 갱신해야 한다(다중 마스터 및 순환 복제 같은 방법이 도움이 될 수 있다).
 
 ---
 
-## Section 6: Caching
-A **cache** stores frequently accessed data in memory to reduce database load. The cache tier is a temporary data store layer, much faster than the database. 
+## 6절: 캐싱
+**캐시**는 자주 접근하는 데이터를 메모리에 저장하여 데이터베이스 부하를 줄인다. 캐시 계층은 임시 데이터 저장 계층이며 데이터베이스보다 훨씬 빠르다.
 
 <div style="margin-left:3rem">
    <img src="./images/cache.png" width="500" />
 </div>
 
-### Caching considerations
-1. **Use case**: Consider using cache when data is read frequently but modified infrequently.
-2. **Expiration Policies:** Once cached data is expired, it is removed from the cache. When there is no expiration policy, cached
-data will be stored in the memory permanently.
-3. **Consistency:** This means keeping the data store and the cache in sync. Inconsistency
-can happen because data-modifying operations on the data store and cache are not in a single transaction. 
-4. **Mitigating failures**: A single cache server represents a potential single point of failure, multiple
-cache servers across different data centers are recommended to avoid SPOF.
-5. **Eviction Policies:**: Once the cache is full, items need to be evicted to free up memory. LRU is the most popular cache eviction policy.
+### 캐싱 고려 사항
+1. **사용 사례**: 데이터를 자주 읽지만 드물게 변경하는 경우 캐시 사용을 고려한다.
+2. **만료 정책:** 캐시된 데이터가 만료되면 캐시에서 제거한다. 만료 정책이 없으면 캐시된 데이터가 메모리에 영구적으로 저장된다.
+3. **일관성:** 데이터 저장소와 캐시를 동기화된 상태로 유지하는 것을 의미한다. 데이터 저장소와 캐시의 데이터 변경 작업이 단일 트랜잭션에 포함되지 않기 때문에 불일치가 발생할 수 있다.
+4. **장애 완화**: 단일 캐시 서버는 잠재적인 단일 장애점(SPOF)이다. SPOF를 피하려면 서로 다른 데이터 센터에 여러 캐시 서버를 두는 것이 좋다.
+5. **캐시 제거 정책:** 캐시가 가득 차면 메모리를 확보하기 위해 항목을 제거해야 한다. LRU는 가장 널리 쓰이는 캐시 제거 정책이다.
 
 ---
 
-## Section 7: Content Delivery Network (CDN)
-A **CDN** improves load times by caching static content (images, CSS, JavaScript) on geographically distributed servers.
+## 7절: 콘텐츠 전송 네트워크(CDN)
+**CDN**은 지리적으로 분산된 서버에 정적 콘텐츠(이미지, CSS, JavaScript)를 캐싱하여 로딩 시간을 단축한다.
 
 <div style="margin-left:3rem">
    <img src="./images/cdn.png" width="400" />
 </div>
 
-### Workflow
-1. User requests content from the nearest CDN server.
-2. If unavailable, content is fetched from the origin server and cached.
+### 작업 흐름
+1. 사용자가 가장 가까운 CDN 서버에 콘텐츠를 요청한다.
+2. 콘텐츠가 없으면 원본 서버에서 가져와 캐싱한다.
 
 
-### CDN considerations
-1. **Cost:** CDNs are run by third-party providers which charge for data transfers in and out of the CDN.
-2. **Cache Expiry:** The cache expiry time should neither be too long nor too short.
-3. **CDN fallback:** If there is a temporary CDN outage, clients should be able to detect the problem
-and request resources from the origin.
-4. **Invalidating files:** If files are updated the cache should be invalidated to point to the updated files.
+### CDN 고려 사항
+1. **비용:** CDN은 서드 파티 제공업체가 운영하며, CDN으로 들어오고 나가는 데이터 전송에 요금을 부과한다.
+2. **캐시 만료:** 캐시 만료 시간은 너무 길어서도, 너무 짧아서도 안 된다.
+3. **CDN 장애 대비:** CDN에 일시적인 장애가 발생하면 클라이언트가 문제를 감지하고 원본 서버에 리소스를 요청할 수 있어야 한다.
+4. **파일 무효화:** 파일이 갱신되면 갱신된 파일을 가리키도록 캐시를 무효화해야 한다.
 
 ---
 
-## Section 8: Stateless Web Tier
-By moving session data to a shared datastore, web servers become stateless. This allows:
-1. Easier horizontal scaling.
-2. Auto-scaling based on traffic.
+## 8절: 무상태 웹 계층
+세션 데이터를 공유 데이터 저장소로 옮기면 웹 서버가 무상태가 된다. 이를 통해 다음이 가능하다.
+1. 수평 확장이 쉬워진다.
+2. 트래픽에 따른 자동 확장이 가능해진다.
 
 <div style="margin-left:3rem">
    <img src="./images/stateless.png" width="400" />
@@ -152,88 +143,86 @@ By moving session data to a shared datastore, web servers become stateless. This
 
 ---
 
-## Section 9: Multi-Data Center Setup
-Deploying across multiple data centers improves availability and reduces latency. Strategies include:
+## 9절: 다중 데이터 센터 구성
+여러 데이터 센터에 배포하면 가용성이 향상되고 지연 시간이 줄어든다. 전략은 다음과 같다.
 
 <div style="margin-left:3rem">
    <img src="./images/data-center.png" width="400" />
 </div>
 
-1. **GeoDNS Routing:** Direct users to the nearest data center.
-2. **Data Replication:** Synchronize data across centers to prevent inconsistencies.
+1. **GeoDNS 라우팅:** 사용자를 가장 가까운 데이터 센터로 보낸다.
+2. **데이터 복제:** 불일치를 방지하도록 데이터 센터 간에 데이터를 동기화한다.
 
-### Key considerations
-- **Traffic redirection:** Effective tools are needed to direct traffic to the correct data center.
-- **Data synchronization:** A common strategy is to replicate data across multiple data centers. 
-- **Test and deployment:**  Automated deployment tools are vital to keep services consistent through all the data centers.
+### 주요 고려 사항
+- **트래픽 리디렉션:** 트래픽을 올바른 데이터 센터로 보내려면 효과적인 도구가 필요하다.
+- **데이터 동기화:** 여러 데이터 센터에 데이터를 복제하는 것이 일반적인 전략이다.
+- **테스트 및 배포:** 모든 데이터 센터에서 서비스의 일관성을 유지하려면 자동화된 배포 도구가 필수적이다.
 
 ---
 
-## Section 10: Message Queue
-A **message queue** is a durable component, stored in memory, that supports asynchronous
-communication. It serves as a buffer and distributes asynchronous requests.
+## 10절: 메시지 큐
+**메시지 큐**는 메모리에 저장되며 비동기 통신을 지원하는 내구성 있는 구성 요소다. 버퍼 역할을 하며 비동기 요청을 분산한다.
 
 <div style="margin-left:3rem">
    <img src="./images//message-queue.png" width="500" />
 </div>
 
-- Input services, called producers/publishers, create messages, and publish them to a message queue.
-- Other services called consumers/subscribers, connect to the queue, and perform actions defined by the messages.
+- 프로듀서/퍼블리셔라고 부르는 입력 서비스가 메시지를 생성하여 메시지 큐에 발행한다.
+- 컨슈머/서브스크라이버라고 부르는 다른 서비스가 큐에 연결하여 메시지에 정의된 작업을 수행한다.
 
 ---
 
-## Section 11: Logging, Metrics, and Automation
+## 11절: 로깅, 지표 및 자동화
 
 <div style="margin-left:3rem">
    <img src="./images/logging.png" width="400" />
 </div>
 
-### Importance
-1. **Logging:** Tracks errors and system health.
-2. **Metrics:** Provides insights into performance and user activity.
-3. **Automation:** Streamlines testing, deployment, and scaling.
+### 중요성
+1. **로깅:** 오류와 시스템 상태를 추적한다.
+2. **지표:** 성능과 사용자 활동을 파악하는 데 필요한 정보를 제공한다.
+3. **자동화:** 테스트, 배포 및 확장을 효율화한다.
 
 ---
 
-## Section 12: Database Scaling
-### Vertical Scaling
-- Adds hardware resources but has physical and cost limitations.
-- Has multiple drawbacks:
-   -  Greater risk of single point of failures.
-   -  Overall cost of vertical scaling is high
+## 12절: 데이터베이스 확장
+### 수직 확장
+- 하드웨어 자원을 추가하지만 물리적 한계와 비용 제약이 있다.
+- 다음과 같은 여러 단점이 있다.
+   - 단일 장애점이 발생할 위험이 더 크다.
+   - 수직 확장의 전체 비용이 높다.
 
-### Horizontal Scaling (Sharding)
+### 수평 확장(샤딩)
 
 <div style="margin-left:3rem">
    <img src="./images/horizontal-scaling.png" width="400" />
 </div>
 
-- Divides data across multiple shards using keys (e.g., `user_id`).
-   - Sharding separates large databases into smaller, more easily managed parts called shards.
-   - Each shard shares the same schema, though the actual data on each shard is unique to the shard.
--  Sharding key is critical when implementing a sharding strategy. When choosing a sharding key it is important to choose a key that can evenly distribute data.
+- 키(예: `user_id`)를 사용하여 데이터를 여러 샤드에 나눈다.
+   - 샤딩은 큰 데이터베이스를 샤드라고 부르는 더 작고 관리하기 쉬운 부분으로 분리한다.
+   - 각 샤드는 동일한 스키마를 공유하지만, 각 샤드의 실제 데이터는 해당 샤드에 고유하다.
+- 샤딩 전략을 구현할 때 샤딩 키가 매우 중요하다. 샤딩 키를 선택할 때는 데이터를 고르게 분산할 수 있는 키를 선택하는 것이 중요하다.
 
-#### Challenges 
-1. **Resharding data:** Resharding data is needed when:
-   - Single shard could no longer hold more data due to rapid growth. 
-   - Certain shards might experience shard exhaustion faster than others due to uneven data distribution.
-   - Consistent Hashing is used to overcome these problems
+#### 과제
+1. **데이터 재샤딩:** 다음과 같은 경우 데이터 재샤딩이 필요하다.
+   - 빠른 증가로 인해 단일 샤드에 더 이상 데이터를 저장할 수 없다.
+   - 불균등한 데이터 분포로 인해 특정 샤드의 용량이 다른 샤드보다 더 빨리 소진될 수 있다.
+   - 이러한 문제를 해결하기 위해 일관 해싱을 사용한다.
 
-2. **Celebrity problem:**  Excessive access to a specific shard could cause server overload.
-   - To solve this problem, we may need to allocate a shard for each celebrity.
+2. **유명인 문제:** 특정 샤드에 대한 과도한 접근으로 서버가 과부하될 수 있다.
+   - 이 문제를 해결하려면 유명인마다 샤드를 할당해야 할 수 있다.
 
-3. **Join and de-normalization:** Once a database has been sharded across multiple servers, it is hard to perform join operations across database shards.
-   -  A common workaround is to de-normalize the database so that queries can be performed in a single table.
+3. **조인 및 비정규화:** 데이터베이스를 여러 서버에 샤딩하고 나면 데이터베이스 샤드 간에 조인 작업을 수행하기 어렵다.
+   - 일반적인 해결 방법은 단일 테이블에서 쿼리를 수행할 수 있도록 데이터베이스를 비정규화하는 것이다.
 
 ---
 
-## Conclusion
-### Key Takeaways
-1. Keep the web tier stateless.
-2. Build redundancy at every tier.
-3. Use caching and CDNs to optimize performance.
-4. Scale the data tier with sharding.
-5. Decouple components for flexibility.
+## 결론
+### 핵심 요점
+1. 웹 계층을 무상태로 유지한다.
+2. 모든 계층에 중복성을 구축한다.
+3. 캐싱과 CDN을 사용해 성능을 최적화한다.
+4. 샤딩으로 데이터 계층을 확장한다.
+5. 유연성을 높이기 위해 구성 요소 간 결합도를 낮춘다.
 
-This chapter provides a solid foundation for building scalable systems that can handle millions of users.
-
+이 장은 수백만 명의 사용자를 처리할 수 있는 확장 가능한 시스템을 구축하기 위한 탄탄한 기초를 제공한다.

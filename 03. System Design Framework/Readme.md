@@ -1,115 +1,114 @@
-# Chapter 3: A Framework for System Design Interviews
+# 3장: 시스템 설계 면접을 위한 프레임워크
 
-## Introduction
-System design interviews are a key part of the hiring process, simulating real-life problem-solving scenarios. These interviews evaluate not just technical skills but also collaboration, communication, and the ability to handle ambiguous requirements.
+## 소개
+시스템 설계 면접은 실제 문제 해결 상황을 재현하는 채용 절차의 핵심 부분이다. 이러한 면접은 기술 역량뿐 아니라 협업, 의사소통 및 모호한 요구사항을 다루는 능력도 평가한다.
 
-This chapter introduces a **4-step framework** for navigating system design interviews effectively.
-
----
-
-## Step 1: Understand the Problem and Establish Design Scope
-
-### Key Objectives
-- Clarify requirements and assumptions.
-- Avoid jumping into solutions prematurely.
-- Showcase critical thinking by asking good questions.
-
-### Approach
-- **Ask Clarifying Questions:**
-  - What are the most important features?
-  - What scale does the system need to handle?
-  - Are we building for web, mobile, or both?
-  - Are there existing technologies or constraints?
-
-- **Document Assumptions:** Write assumptions on a whiteboard or paper for reference.
-
-### Example
-**Problem:** Design a news feed system.  
-**Questions:**
-- Is it a mobile app, web app, or both?
-- How many friends can a user have?
-- Should the feed include images and videos?
-- Is the feed sorted by reverse chronological order?
+이 장에서는 시스템 설계 면접을 효과적으로 진행하기 위한 **4단계 프레임워크**를 소개한다.
 
 ---
 
-## Step 2: Propose High-Level Design and Get Buy-In
+## 1단계: 문제를 이해하고 설계 범위 정하기
 
-### Key Objectives
-- Develop a high-level architecture.
-- Collaborate with the interviewer to refine the design.
+### 핵심 목표
+- 요구사항과 가정을 명확히 한다.
+- 성급하게 해결책부터 제시하지 않는다.
+- 좋은 질문을 던져 비판적 사고 능력을 보여 준다.
 
-### Approach
-- **Draft a Blueprint:**
-  - Use box diagrams for key components (e.g., clients, APIs, databases, caches, CDNs).
-  - Treat the interviewer as a teammate to refine the design.
+### 접근법
+- **명확화 질문하기:**
+  - 가장 중요한 기능은 무엇인가?
+  - 시스템이 어느 정도 규모를 처리해야 하는가?
+  - 웹, 모바일 또는 둘 다를 대상으로 구축하는가?
+  - 기존 기술이나 제약 조건이 있는가?
 
-- **Perform Back-of-the-Envelope Calculations:**
-  - Ensure the design can handle the scale constraints.
+- **가정 기록하기:** 참고할 수 있도록 화이트보드나 종이에 가정을 적는다.
 
-- **Walk Through Use Cases:** Identify edge cases and validate design assumptions.
-
-### Example
-For a news feed system, divide the design into:
-1. **Feed Publishing Flow:** Writing posts into databases and populating friends' feeds.
-2. **Feed Retrieval Flow:** Aggregating and displaying friends' posts in reverse chronological order.
-
----
-
-## Step 3: Design Deep Dive
-
-### Key Objectives
-- Dive into critical components.
-- Showcase depth of understanding and adaptability.
-
-### Approach
-- **Prioritize Key Components:** Focus on areas most relevant to the problem.
-- **Discuss Bottlenecks:** Identify potential performance issues and propose solutions.
-- **Balance Detail:** Avoid over-engineering or unnecessary deep dives.
-
-### Example Topics
-- **URL Shortener:** Focus on hash function design.
-- **Chat System:** Explore latency reduction and online/offline status handling.
-- **News Feed System:** Examine feed publishing and retrieval processes.
+### 예시
+**문제:** 뉴스 피드 시스템 설계\
+**질문:**
+- 모바일 앱인가, 웹 앱인가, 아니면 둘 다인가?
+- 사용자는 친구를 몇 명까지 가질 수 있는가?
+- 피드에 이미지와 동영상을 포함해야 하는가?
+- 피드를 역시간순으로 정렬하는가?
 
 ---
 
-## Step 4: Wrap-Up
+## 2단계: 개략적 설계를 제안하고 합의 얻기
 
-### Key Objectives
-- Highlight areas for improvement.
-- Recap the design and discuss follow-ups.
+### 핵심 목표
+- 개략적 아키텍처를 개발한다.
+- 면접관과 협력하여 설계를 개선한다.
 
-### Approach
-- **Identify Bottlenecks:** Discuss potential limitations and scaling strategies.
-- **Summarize Design:** Recap major design decisions and trade-offs.
-- **Propose Enhancements:**
-  - How to scale from 1 million to 10 million users.
-  - Error handling for server failures or network issues.
+### 접근법
+- **청사진 초안 작성하기:**
+  - 주요 구성 요소(예: 클라이언트, API, 데이터베이스, 캐시, CDN)를 상자 다이어그램으로 나타낸다.
+  - 면접관을 팀원으로 생각하고 함께 설계를 개선한다.
 
----
+- **개략적 규모 추정 수행하기:**
+  - 설계가 규모 제약을 처리할 수 있는지 확인한다.
 
-## Best Practices
+- **사용 사례 살펴보기:** 예외 사례를 식별하고 설계 가정을 검증한다.
 
-### Dos
-- **Ask Questions:** Clarify ambiguities before diving into solutions.
-- **Communicate:** Share your thought process with the interviewer.
-- **Iterate with the Interviewer:** Treat them as a collaborator.
-- **Show Flexibility:** Suggest alternative approaches and refine your design.
-- **Focus on Critical Components:** Prioritize key parts of the system.
-
-### Don’ts
-- **Avoid Premature Solutions:** Don’t design before understanding the requirements.
-- **Don’t Go Silent:** Communicate regularly during the process.
-- **Avoid Over-Engineering:** Focus on practical, scalable solutions.
+### 예시
+뉴스 피드 시스템의 설계를 다음과 같이 나눈다.
+1. **피드 발행 흐름:** 게시물을 데이터베이스에 쓰고 친구들의 피드에 반영한다.
+2. **피드 조회 흐름:** 친구의 게시물을 집계하여 역시간순으로 표시한다.
 
 ---
 
-## Time Management
+## 3단계: 상세 설계
 
-### Suggested Time Allocation (for 45-Minute Interviews):
-1. **Understand Problem and Scope:** 3–10 minutes
-2. **High-Level Design and Buy-In:** 10–15 minutes
-3. **Deep Dive:** 10–25 minutes
-4. **Wrap-Up:** 3–5 minutes
+### 핵심 목표
+- 핵심 구성 요소를 깊이 살펴본다.
+- 깊이 있는 이해와 적응력을 보여 준다.
 
+### 접근법
+- **핵심 구성 요소 우선순위 지정:** 문제와 가장 관련성이 높은 영역에 집중한다.
+- **병목 논의:** 잠재적인 성능 문제를 식별하고 해결책을 제안한다.
+- **세부 수준 조절:** 과도한 설계나 불필요한 상세 분석을 피한다.
+
+### 주제 예시
+- **URL 단축기:** 해시 함수 설계에 집중한다.
+- **채팅 시스템:** 지연 시간 단축과 온라인/오프라인 상태 처리를 살펴본다.
+- **뉴스 피드 시스템:** 피드 발행 및 조회 과정을 검토한다.
+
+---
+
+## 4단계: 마무리
+
+### 핵심 목표
+- 개선할 영역을 강조한다.
+- 설계를 요약하고 후속 논의를 진행한다.
+
+### 접근법
+- **병목 식별:** 잠재적인 제약과 확장 전략을 논의한다.
+- **설계 요약:** 주요 설계 결정과 트레이드오프를 요약한다.
+- **개선안 제안:**
+  - 사용자 100만 명에서 1,000만 명으로 확장하는 방법.
+  - 서버 장애나 네트워크 문제에 대한 오류 처리.
+
+---
+
+## 모범 사례
+
+### 해야 할 일
+- **질문하기:** 해결책을 구체화하기 전에 모호한 부분을 명확히 한다.
+- **소통하기:** 사고 과정을 면접관과 공유한다.
+- **면접관과 함께 개선하기:** 면접관을 협력자로 생각하고 설계를 반복적으로 개선한다.
+- **유연성 보여 주기:** 대안적인 접근법을 제안하고 설계를 개선한다.
+- **핵심 구성 요소에 집중하기:** 시스템의 주요 부분을 우선한다.
+
+### 하지 말아야 할 일
+- **성급한 해결책 피하기:** 요구사항을 이해하기 전에 설계하지 않는다.
+- **침묵하지 않기:** 과정 중에 정기적으로 소통한다.
+- **과도한 설계 피하기:** 실용적이고 확장 가능한 해결책에 집중한다.
+
+---
+
+## 시간 관리
+
+### 권장 시간 배분(45분 면접 기준):
+1. **문제와 범위 이해:** 3~10분
+2. **개략적 설계 및 합의:** 10~15분
+3. **상세 설계:** 10~25분
+4. **마무리:** 3~5분

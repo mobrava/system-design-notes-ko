@@ -1,152 +1,151 @@
-# Chapter 9: Design a Web Crawler
+# 9장: 웹 크롤러 설계
 
-## Introduction
-A **web crawler**, also known as a spider or robot, is used to discover and collect web content, such as web pages, images, and videos. This chapter focuses on designing a scalable web crawler for **search engine indexing**.
+## 소개
+**웹 크롤러**는 스파이더 또는 로봇이라고도 하며 웹 페이지, 이미지, 동영상 같은 웹 콘텐츠를 발견하고 수집하는 데 사용된다. 이 장에서는 **검색 엔진 색인**을 위한 확장 가능한 웹 크롤러 설계에 중점을 둔다.
 
-### Applications of Web Crawlers
-1. **Search Engine Indexing:** Collect web pages to create searchable indexes (e.g., Googlebot).
-2. **Web Archiving:** Preserve web data for future use (e.g., US Library of Congress).
-3. **Web Mining:** Extract knowledge from web data (e.g., financial analysis of shareholder reports).
-4. **Web Monitoring:** Detect copyright or trademark infringements.
+### 웹 크롤러의 활용 분야
+1. **검색 엔진 색인:** 검색 가능한 색인을 만들기 위해 웹 페이지를 수집한다(예: Googlebot).
+2. **웹 아카이빙:** 나중에 사용할 수 있도록 웹 데이터를 보존한다(예: 미국 의회도서관).
+3. **웹 마이닝:** 웹 데이터에서 지식을 추출한다(예: 주주 보고서의 재무 분석).
+4. **웹 모니터링:** 저작권 또는 상표권 침해를 감지한다.
 
-### Design Challenges
-A good web crawler must address:
-- **Scalability:** Handle billions of pages using parallelization.
-- **Robustness:** Manage bad HTML, crashes, and malicious links.
-- **Politeness:** Avoid overwhelming servers with too many requests.
-- **Extensibility:** Support new content types with minimal changes.
-
----
-
-## Step 1: Understanding the Problem
-
-### Requirements
-1. Crawl **1 billion web pages per month** (400 pages/second, peak 800 QPS).
-2. Collect **HTML-only content**.
-3. Track new and updated pages.
-4. Ignore duplicate content.
-5. Store crawled data for **5 years**, requiring ~30 PB of storage.
+### 설계 과제
+좋은 웹 크롤러는 다음 사항을 해결해야 한다.
+- **확장성:** 병렬화를 사용하여 수십억 개의 페이지를 처리한다.
+- **견고성:** 잘못된 HTML, 비정상 종료 및 악성 링크를 처리한다.
+- **예의성:** 너무 많은 요청으로 서버에 과부하를 주지 않는다.
+- **확장 용이성:** 최소한의 변경으로 새로운 콘텐츠 유형을 지원한다.
 
 ---
 
-## Step 2: High-Level Design
+## 1단계: 문제 이해
 
-### Components
+### 요구사항
+1. **매월 10억 개의 웹 페이지**를 크롤링한다(초당 400페이지, 최대 800 QPS).
+2. **HTML 콘텐츠만** 수집한다.
+3. 새 페이지와 갱신된 페이지를 추적한다.
+4. 중복 콘텐츠를 무시한다.
+5. 크롤링한 데이터를 **5년간** 저장하며 약 30 PB의 저장 공간이 필요하다.
+
+---
+
+## 2단계: 개략적 설계
+
+### 구성 요소
 <p align="center">
-<img src="./images/web-crawler-architecture.png" alt="Web Crawler Architecture" width="700">
+<img src="./images/web-crawler-architecture.png" alt="웹 크롤러 아키텍처" width="700">
 </p>
 
-1. **Seed URLs:** Starting points for the crawler.
-    - Need to selective as a good starting point that a crawler can utilize to traverse as many links as possible.
-    - Can be based on locality based on different popular website or based on topics.
-    - Strategies: Categorize by locality or topic (e.g., sports, healthcare).
+1. **시드 URL:** 크롤러의 시작점이다.
+    - 크롤러가 가능한 한 많은 링크를 순회하는 데 활용할 수 있도록 좋은 시작점을 선별해야 한다.
+    - 지역별 인기 웹사이트나 주제를 기준으로 정할 수 있다.
+    - 전략: 지역 또는 주제(예: 스포츠, 의료)별로 분류한다.
 
-2. **URL Frontier:** Stores URLs to be downloaded.
-   - Implemented as a **FIFO queue**.
+2. **URL 프런티어:** 다운로드할 URL을 저장한다.
+   - **FIFO 큐**로 구현한다.
 
-3. **HTML Downloader:** Downloads web pages from URLs provided by the URL Frontier.
+3. **HTML 다운로더:** URL 프런티어가 제공하는 URL에서 웹 페이지를 다운로드한다.
 
-4. **DNS Resolver:** Converts URLs to IP addresses.
+4. **DNS 리졸버:** URL을 IP 주소로 변환한다.
 
-5. **Content Parser:** Validates and parses web pages.
-   - Discards malformed pages.
+5. **콘텐츠 파서:** 웹 페이지를 검증하고 파싱한다.
+   - 형식이 잘못된 페이지는 버린다.
 
-6. **Content Seen?:** Checks for duplicate content using hash comparisons (compare the hash values of the two web pages).
+6. **콘텐츠 중복 확인:** 해시 비교를 사용하여 중복 콘텐츠를 확인한다(두 웹 페이지의 해시 값을 비교한다).
 
-7. **Content Storage:** Stores HTML pages on disk (popular content in memory to reduce latency).
+7. **콘텐츠 저장소:** HTML 페이지를 디스크에 저장한다(지연 시간을 줄이기 위해 인기 콘텐츠는 메모리에 저장한다).
 
-8. **URL Extractor:** Extracts new links from parsed pages.
+8. **URL 추출기:** 파싱한 페이지에서 새 링크를 추출한다.
 
-9. **URL Filter:** Excludes blacklisted or erroneous URLs.
+9. **URL 필터:** 블랙리스트에 있거나 오류가 있는 URL을 제외한다.
 
-10. **URL Seen?** Tracks visited URLs to avoid duplication.
+10. **URL 방문 여부:** 중복을 피하기 위해 방문한 URL을 추적한다.
 
-11. **URL Storage:** Stores already visited URLs.
-
-
----
-
-### Workflow
-1. Add **Seed URLs** to the URL Frontier.
-2. **HTML Downloader** fetches URLs and resolves their IPs via the DNS Resolver.
-3. **Content Parser** validates and passes content to the "Content Seen?" component.
-4. If the content is new, extract links via the **URL Extractor**.
-5. Filter and add unique links to the URL Frontier.
+11. **URL 저장소:** 이미 방문한 URL을 저장한다.
 
 
 ---
 
-## Step 3: Deep Dive into Key Components
+### 작업 흐름
+1. **시드 URL**을 URL 프런티어에 추가한다.
+2. **HTML 다운로더**가 URL에 해당하는 웹 페이지를 가져오고 DNS 리졸버를 통해 해당 IP를 확인한다.
+3. **콘텐츠 파서**가 콘텐츠를 검증하여 "콘텐츠 중복 확인" 구성 요소로 전달한다.
+4. 새 콘텐츠라면 **URL 추출기**를 통해 링크를 추출한다.
+5. 링크를 필터링하고 고유한 링크를 URL 프런티어에 추가한다.
+
+
+---
+
+## 3단계: 핵심 구성 요소 상세 설계
 ### DFS/BFS
--  The web can be though of as a directed graph where web pages are nodes and hyperlinks (URLs) as edges.
--  BFS is usually used for graph traversal as the depth can be be very deep thus DFS is not ideal.
--  Standard BFS does not take the priority of a URL into consideration, not every page has the same level of quality and importance.
+- 웹은 웹 페이지를 노드로, 하이퍼링크(URL)를 엣지로 하는 방향 그래프로 생각할 수 있다.
+- 깊이가 매우 깊을 수 있어 DFS는 적합하지 않으므로 일반적으로 그래프 순회에 BFS를 사용한다.
+- 표준 BFS는 URL의 우선순위를 고려하지 않으며, 모든 페이지의 품질과 중요도가 같지는 않다.
 
 
-### URL Frontier
-- **Politeness:** 
-    - Ensure only one request per host at a time. Add a dealy b/w two download tasks.
-    - Use a mapping from hostnames to queues and worker (download) threads.
-    - Each downloader thread has a separate FIFO queue and only downloads URLs from that queue.
+### URL 프런티어
+- **예의성:**
+    - 한 번에 호스트당 하나의 요청만 보내도록 한다. 두 다운로드 작업 사이에 지연 시간을 둔다.
+    - 호스트 이름을 큐 및 워커(다운로드) 스레드에 매핑한다.
+    - 각 다운로더 스레드는 별도의 FIFO 큐를 가지며 해당 큐의 URL만 다운로드한다.
 
-        <img src="./images/politeness.png" alt="Politeness" width="500">
+        <img src="./images/politeness.png" alt="예의성" width="500">
 
-    - **Queue router:** Ensures that each queue (b1, b2, … bn) only contains URLs from the same host.
-    - **Mapping table:** It maps each host to a queue.
-    - **Queue selector:** Each worker thread is mapped to a FIFO queue, and it only downloads URLs from that queue. The queue selection logic is done by the Queue selector.
-    - **Worker thread 1 to N.** A worker thread downloads web pages sequentially from the same host. A delay can be added between two download tasks.
+    - **큐 라우터:** 각 큐(b1, b2, … bn)에 동일한 호스트의 URL만 포함되도록 한다.
+    - **매핑 테이블:** 각 호스트를 큐에 매핑한다.
+    - **큐 선택기:** 각 워커 스레드는 FIFO 큐에 매핑되며 해당 큐의 URL만 다운로드한다. 큐 선택 로직은 큐 선택기가 수행한다.
+    - **워커 스레드 1~N.** 워커 스레드는 동일한 호스트에서 웹 페이지를 순차적으로 다운로드한다. 두 다운로드 작업 사이에 지연 시간을 둘 수 있다.
 
-- **Priority:** 
-    - Assign higher priority to important pages (e.g., by PageRank or update frequency).
+- **우선순위:**
+    - 중요한 페이지에 더 높은 우선순위를 부여한다(예: PageRank 또는 갱신 빈도 기준).
 
-        <img src="./images/prioritizer.png" alt="Politeness" width="500">
+        <img src="./images/prioritizer.png" alt="예의성" width="500">
     
-    - **Prioritizer:** It takes URLs as input and computes the priorities.
-    - **Queue f1 to fn:** Each queue has an assigned priority. Queues with high priority are selected with higher probability.
-    - **Queue selector:** Randomly choose a queue with a bias towards queues with higher priority.
-    - **Front queues:** manage prioritization
-    - **Back queues:** manage politeness
+    - **우선순위 지정기:** URL을 입력받아 우선순위를 계산한다.
+    - **큐 f1~fn:** 각 큐에는 우선순위가 할당된다. 우선순위가 높은 큐를 더 높은 확률로 선택한다.
+    - **큐 선택기:** 우선순위가 높은 큐에 가중치를 두고 큐를 무작위로 선택한다.
+    - **프런트 큐:** 우선순위 지정을 관리한다.
+    - **백 큐:** 예의성을 관리한다.
 
-- **Freshness:** Recrawl based on update history or importance.
+- **최신성:** 갱신 이력이나 중요도에 따라 다시 크롤링한다.
 
 
-### HTML Downloader
-- **Robots.txt Compliance:** Respect rules in robots.txt files.
-- **Performance Optimizations:**
-  1. Distributed crawling using multiple servers.
-  2. Use a **DNS cache** to avoid repeated lookups.
-  3. Geographically distribute crawl servers for faster downloads.
-  4. Use a short timeout to avoid slow or unresponsive servers.
+### HTML 다운로더
+- **robots.txt 준수:** robots.txt 파일의 규칙을 따른다.
+- **성능 최적화:**
+  1. 여러 서버를 사용한 분산 크롤링.
+  2. 반복 조회를 피하기 위해 **DNS 캐시**를 사용한다.
+  3. 더 빠르게 다운로드할 수 있도록 크롤링 서버를 지리적으로 분산한다.
+  4. 느리거나 응답하지 않는 서버에서 오래 대기하지 않도록 짧은 타임아웃을 사용한다.
 
-### Robustness
-1. **Consistent Hashing:** Distribute load among servers effectively.
-2. **Error Handling:** Prevent system crashes from exceptions.
-3. **Data Validation:** Ensure content integrity.
+### 견고성
+1. **일관 해싱:** 서버 간에 부하를 효과적으로 분산한다.
+2. **오류 처리:** 예외로 인한 시스템 비정상 종료를 방지한다.
+3. **데이터 검증:** 콘텐츠 무결성을 보장한다.
 
-### Extensibility
-- Add modules for new content types (e.g., PNG downloader, web monitor).
-- Example: Plug in a module to monitor web content for copyright violations.
+### 확장 용이성
+- 새로운 콘텐츠 유형을 위한 모듈을 추가한다(예: PNG 다운로더, 웹 모니터).
+- 예시: 저작권 침해 여부를 확인하도록 웹 콘텐츠를 모니터링하는 모듈을 추가한다.
 
-    <img src="./images/extensibility.png" alt="Politeness" width="600">
+    <img src="./images/extensibility.png" alt="예의성" width="600">
 ---
 
-### Avoiding Problematic Content
-1. **Duplicate Content:** Detect using hash comparisons.
-2. **Spider Traps:** Avoid infinite loops with techniques like URL length limits.
-3. **Data Noise:** Filter irrelevant content like ads or spam.
+### 문제가 있는 콘텐츠 방지
+1. **중복 콘텐츠:** 해시 비교를 사용하여 감지한다.
+2. **스파이더 트랩:** URL 길이 제한 같은 기법으로 무한 루프를 피한다.
+3. **데이터 노이즈:** 광고나 스팸과 같이 관련 없는 콘텐츠를 걸러 낸다.
 
 ---
 
-## Step 4: Wrap Up
-### Key Takeaways
-1. Web crawlers must balance scalability, robustness, politeness, and extensibility.
-2. **Politeness** prevents overloading servers, while **priority** ensures important pages are crawled first.
-3. Efficient storage and error handling are crucial for handling large-scale crawling.
+## 4단계: 마무리
+### 핵심 요점
+1. 웹 크롤러는 확장성, 견고성, 예의성 및 확장 용이성의 균형을 맞춰야 한다.
+2. **예의성**은 서버 과부하를 방지하고 **우선순위**는 중요한 페이지를 먼저 크롤링하도록 한다.
+3. 대규모 크롤링을 처리하려면 효율적인 저장과 오류 처리가 매우 중요하다.
 
-### Additional Considerations
-- **Server-Side Rendering:** Handle dynamic content generated by JavaScript or AJAX.
-- **Anti-Spam Measures:** Exclude low-quality or irrelevant pages.
-- **Database Sharding:** Scale the data layer using replication and sharding.
-- **Horizontal Scaling:** Use stateless servers to scale crawl jobs efficiently.
-- **Analytics:** Collect and analyze data for insights.
-
+### 추가 고려 사항
+- **서버 측 렌더링:** JavaScript 또는 AJAX가 생성하는 동적 콘텐츠를 처리한다.
+- **스팸 방지 조치:** 품질이 낮거나 관련 없는 페이지를 제외한다.
+- **데이터베이스 샤딩:** 복제와 샤딩을 사용하여 데이터 계층을 확장한다.
+- **수평 확장:** 무상태 서버를 사용하여 크롤링 작업을 효율적으로 확장한다.
+- **분석:** 인사이트를 얻기 위해 데이터를 수집하고 분석한다.

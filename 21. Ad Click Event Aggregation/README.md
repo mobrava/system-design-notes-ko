@@ -1,120 +1,120 @@
-# Chapter 21: Ad Click Event Aggregation
+# 21장: 광고 클릭 이벤트 집계
 
-## Introduction
-**Digital advertising** is a big industry with the rise of Facebook, YouTube, TikTok, etc.
+## 소개
+Facebook, YouTube, TikTok 등의 부상과 함께 **디지털 광고**는 거대한 산업이 되었다.
 
-Hence, tracking ad click events is important. In this chapter, we explore how to design an **ad click event aggregation** system at Facebook/Google scale.
+따라서 광고 클릭 이벤트 추적이 중요하다. 이 장에서는 Facebook/Google 규모의 **광고 클릭 이벤트 집계** 시스템을 설계하는 방법을 살펴본다.
 
-Digital advertising has a process called **real-time bidding (RTB)**, where digital advertising inventory is bought and sold:
+디지털 광고에는 디지털 광고 인벤토리를 사고파는 **실시간 입찰(Real-Time Bidding, RTB)**이라는 프로세스가 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/digital-advertising-example.png" alt="digital-advertising-example" width="500" />
+    <img src="./images/digital-advertising-example.png" alt="디지털 광고 예시" width="500" />
 </div>
 
-Speed of RTB is important as it usually occurs within a second.
-Data accuracy is also very important as it impacts how much money advertisers pay.
+RTB는 일반적으로 1초 안에 이루어지므로 속도가 중요하다.
+광고주가 지불하는 금액에 영향을 주기 때문에 데이터 정확성도 매우 중요하다.
 
-Based on ad click event aggregations, advertisers can make decisions such as adjust target audience and keywords.
-
----
-
-## Step 1: Understand the Problem and Establish Design Scope
- - C: What is the format of the input data?
- - I: 1bil ad clicks per day and 2mil ads in total. Number of ad-click events grows 30% year-over-year.
- - C: What are some of the most important queries our system needs to support?
- - I: Top queries to take into consideration:
-   - Return number of click events for ad X in last Y minutes
-   - Return top 100 most clicked ads in the past 1min. Both parameters should be configurable. Aggregation occurs every minute.
-   - Support data filtering by `ip`, `user_id`, `country` for the above queries
- - C: Do we need to worry about edge cases? Some of the ones I can think of:
-   - There might be events that arrive later than expected
-   - There might be duplicate events
-   - Different parts of the system might be down, so we need to consider system recovery
- - I: That's a good list, take those into consideration
- - C: What is the latency requirement?
- - I: A few minutes of e2e latency for ad click aggregation. For RTB, it is less than a second. It is ok to have that latency for ad click aggregation as those are usually used for billing and reporting.
-
-### **Functional requirements**
- - Aggregate the number of clicks of `ad_id` in the last Y minutes
- - Return top 100 most clicked `ad_id` every minute
- - Support aggregation filtering by different attributes
- - Dataset volume is at Facebook or Google scale
-
-### **Non-functional requirements**
- - Correctness of the aggregation result is important as it's used for RTB and ads billing
- - Properly handle delayed or duplicate events
- - Robustness - system should be resilient to partial failures
- - Latency - a few minutes of e2e latency at most
-
-### **Back-of-the-envelope estimation**
- - 1bil DAU
- - Assuming user clicks 1 ad per day -> 1bil ad clicks per day
- - Ad click QPS = 10,000
- - Peak QPS is 5 times the number = 50,000
- - A single ad click occupies 0.1KB storage. Daily storage requirement is 100gb
- - Monthly storage = 3tb
+광고주는 광고 클릭 이벤트 집계 결과를 바탕으로 대상 고객과 키워드 조정 같은 결정을 내릴 수 있다.
 
 ---
 
-## Step 2: Propose High-Level Design and Get Buy-In
-In this section, we discuss query API design, data model and high-level design.
+## 1단계: 문제 이해 및 설계 범위 확정
+ - 지원자: 입력 데이터의 형식은 무엇인가?
+ - 면접관: 하루에 광고 클릭 10억 건이 발생하고 광고는 총 200만 개다. 광고 클릭 이벤트 수는 매년 30%씩 증가한다.
+ - 지원자: 시스템이 지원해야 하는 가장 중요한 쿼리에는 무엇이 있는가?
+ - 면접관: 고려해야 할 주요 쿼리는 다음과 같다.
+   - 최근 Y분 동안 광고 X의 클릭 이벤트 수 반환
+   - 지난 1분 동안 가장 많이 클릭된 광고 100개 반환. 두 매개변수 모두 설정할 수 있어야 한다. 집계는 1분마다 수행한다.
+   - 위 쿼리에 `ip`, `user_id`, `country` 기반 데이터 필터링 지원
+ - 지원자: 극단적인 상황도 고려해야 하는가? 생각나는 사례는 다음과 같다.
+   - 예상보다 늦게 도착하는 이벤트가 있을 수 있다.
+   - 중복 이벤트가 있을 수 있다.
+   - 시스템 일부가 중단될 수 있으므로 시스템 복구를 고려해야 한다.
+ - 면접관: 좋은 목록이다. 모두 고려한다.
+ - 지원자: 지연 시간 요구사항은 무엇인가?
+ - 면접관: 광고 클릭 집계의 종단 간 지연 시간은 몇 분이다. RTB는 1초 미만이다. 광고 클릭 집계는 일반적으로 청구와 보고에 사용하므로 그 정도 지연 시간은 괜찮다.
 
-### **Query API Design**
-The API is a contract between the client and the server. In our case, the client is the dashboard user - data scientist/analyst, advertiser, etc.
+### **기능 요구사항**
+ - 최근 Y분 동안 `ad_id`의 클릭 수 집계
+ - 1분마다 가장 많이 클릭된 `ad_id` 100개 반환
+ - 서로 다른 속성을 기준으로 한 집계 필터링 지원
+ - 데이터셋 규모는 Facebook 또는 Google 수준
 
-Here's our functional requirements:
- - Aggregate the number of clicks of `ad_id` in the last Y minutes
- - Return top N most clicked `ad_id` in the last M minutes
- - Support aggregation filtering by different attributes
+### **비기능 요구사항**
+ - 집계 결과는 RTB와 광고 비용 청구에 사용하므로 정확성이 중요하다.
+ - 지연되거나 중복된 이벤트를 올바르게 처리한다.
+ - 견고성. 시스템은 부분 장애를 견딜 수 있어야 한다.
+ - 지연 시간. 종단 간 지연 시간은 최대 몇 분이다.
 
-We need two endpoints to achieve those requirements. Filtering can be done via query parameters on one of them.
+### **개략적인 규모 추정**
+ - DAU 10억 명
+ - 사용자가 하루에 광고 하나를 클릭한다고 가정 -> 하루 광고 클릭 10억 건
+ - 광고 클릭 QPS = 10,000
+ - 최대 QPS는 이 수치의 5배 = 50,000
+ - 광고 클릭 한 건은 0.1KB의 저장 공간을 차지한다. 일일 저장 공간 요구량은 100GB다.
+ - 월간 저장 공간 = 3TB
 
-**Aggregate number of clicks of ad_id in the last M minutes**:
+---
+
+## 2단계: 개략적 설계안 제시 및 동의 구하기
+이 절에서는 쿼리 API 설계, 데이터 모델, 개략적 설계를 논의한다.
+
+### **쿼리 API 설계**
+API는 클라이언트와 서버 사이의 계약이다. 이 사례에서 클라이언트는 대시보드 사용자인 데이터 과학자/분석가, 광고주 등이다.
+
+기능 요구사항은 다음과 같다.
+ - 최근 Y분 동안 `ad_id`의 클릭 수 집계
+ - 최근 M분 동안 가장 많이 클릭된 `ad_id` 상위 N개 반환
+ - 서로 다른 속성을 기준으로 한 집계 필터링 지원
+
+이 요구사항을 충족하려면 엔드포인트 두 개가 필요하다. 필터링은 그중 하나의 쿼리 매개변수로 수행할 수 있다.
+
+**최근 M분 동안 ad_id의 클릭 수 집계**
 
 ```
 GET /v1/ads/{:ad_id}/aggregated_count
 ```
 
-Query parameters:
- - from - start minute. Default is now - 1 min
- - to - end minute. Default is now
- - filter - identifier for different filtering strategies. Eg 001 means "non-US clicks".
+쿼리 매개변수는 다음과 같다.
+ - from - 시작 시각(분). 기본값은 현재 시각 - 1분이다.
+ - to - 종료 시각(분). 기본값은 현재 시각이다.
+ - filter - 서로 다른 필터링 전략의 식별자. 예를 들어 001은 "미국 외 지역의 클릭"을 의미한다.
 
-Response:
- - ad_id - ad identifier
- - count - aggregated count between start and end minutes
+응답은 다음과 같다.
+ - ad_id - 광고 식별자
+ - count - 시작 시각과 종료 시각 사이의 집계된 클릭 수
 
-**Return top N most clicked ad_ids in the last M minutes**
+**최근 M분 동안 가장 많이 클릭된 ad_ids 상위 N개 반환**
 
 ```
 GET /v1/ads/popular_ads
 ```
 
-Query parameters:
- - count - top N most clicked ads
- - window - aggregation window size in minutes
- - filter - identifier for different filtering strategies
+쿼리 매개변수는 다음과 같다.
+ - count - 가장 많이 클릭된 광고 상위 N개
+ - window - 집계 윈도 크기(분)
+ - filter - 서로 다른 필터링 전략의 식별자
 
-Response:
- - list of ad_ids
+응답은 다음과 같다.
+ - ad_ids 목록
 
-### **Data model**
-In our system, we have raw and aggregated data.
+### **데이터 모델**
+이 시스템에는 원시 데이터와 집계 데이터가 있다.
 
-Raw data looks like this:
+원시 데이터는 다음과 같다.
 
 ```
 [AdClickEvent] ad001, 2021-01-01 00:00:01, user 1, 207.148.22.22, USA
 ```
 
-Here's an example in a structured format:
+구조화된 형식의 예시는 다음과 같다.
 | ad_id | click_timestamp     | user  | ip            | country |
 |-------|---------------------|-------|---------------|---------|
 | ad001 | 2021-01-01 00:00:01 | user1 | 207.148.22.22 | USA     |
 | ad001 | 2021-01-01 00:00:02 | user1 | 207.148.22.22 | USA     |
 | ad002 | 2021-01-01 00:00:02 | user2 | 209.153.56.11 | USA     |
 
-Here's the aggregated version:
+집계된 버전은 다음과 같다.
 | ad_id | click_minute | filter_id | count |
 |-------|--------------|-----------|-------|
 | ad001 | 202101010000 | 0012      | 2     |
@@ -122,141 +122,139 @@ Here's the aggregated version:
 | ad001 | 202101010001 | 0012      | 1     |
 | ad001 | 202101010001 | 0023      | 6     |
 
-The `filter_id` helps us achieve our filtering requirements.
+`filter_id`를 사용해 필터링 요구사항을 충족한다.
 | filter_id | region | IP        | user_id |
 |-----------|--------|-----------|---------|
 | 0012      | US     | *         | *       |
 | 0013      | *      | 123.1.2.3 | *       |
 
-To support quickly returning top N most clicked ads in the last M minutes, we'll also maintain this structure:
+최근 M분 동안 가장 많이 클릭된 광고 상위 N개를 빠르게 반환하기 위해 다음 구조도 유지한다.
 | most_clicked_ads   |           |                                                  |
 |--------------------|-----------|--------------------------------------------------|
-| window_size        | integer   | The aggregation window size (M) in minutes       |
-| update_time_minute | timestamp | Last updated timestamp (in 1-minute granularity) |
-| most_clicked_ads   | array     | List of ad IDs in JSON format.                   |
+| window_size        | integer   | 집계 윈도 크기(M, 분)       |
+| update_time_minute | timestamp | 마지막으로 업데이트된 타임스탬프(1분 단위) |
+| most_clicked_ads   | array     | JSON 형식의 광고 ID 목록                   |
 
-What are some pros and cons between storing raw data and storing aggregated data?
- - Raw data enables using the full data set and supports data filtering and recalculation
- - On the other hand, aggregated data allows us to have a smaller data set and a faster query
- - Raw data means having a larger data store and a slower query
- - Aggregated data, however, is derived data, hence there is some data loss.
+원시 데이터와 집계 데이터를 저장할 때 각각 어떤 장단점이 있는가?
+ - 원시 데이터는 전체 데이터셋을 사용할 수 있게 하며 데이터 필터링과 재계산을 지원한다.
+ - 반면 집계 데이터는 데이터셋이 더 작고 쿼리가 더 빠르다.
+ - 원시 데이터는 더 큰 데이터 저장소와 더 느린 쿼리를 의미한다.
+ - 하지만 집계 데이터는 파생 데이터이므로 일부 데이터가 손실된다.
 
-In our design, we'll use a combination of both approaches:
- - It's a good idea to keep the raw data around for debugging. If there is some bug in aggregation, we can discover the bug and backfill.
- - Aggregated data should be stored as well for faster query performance.
- - Raw data can be stored in cold storage to avoid extra storage costs.
+이 설계에서는 두 접근 방식을 조합해 사용한다.
+ - 디버깅을 위해 원시 데이터를 보관하는 것이 좋다. 집계에 버그가 있으면 버그를 찾아 백필할 수 있다.
+ - 쿼리 성능을 높이기 위해 집계 데이터도 저장해야 한다.
+ - 추가 저장 비용을 피하기 위해 원시 데이터는 콜드 저장소에 저장할 수 있다.
 
-When it comes to the database, there are several factors to take into consideration:
- - What does the data look like? Is it relational, document or blob?
- - Is the workload read-heavy, write-heavy or both?
- - Are transactions needed?
- - Do the queries rely on OLAP functions like SUM and COUNT?
+데이터베이스를 선택할 때는 몇 가지 요소를 고려해야 한다.
+ - 데이터는 어떤 형태인가? 관계형 데이터인가, 문서인가, 블롭인가?
+ - 워크로드가 읽기 중심인가, 쓰기 중심인가, 아니면 둘 다인가?
+ - 트랜잭션이 필요한가?
+ - 쿼리가 SUM, COUNT 같은 OLAP 함수에 의존하는가?
 
-For the raw data, we can see that the average QPS is 10k and peak QPS is 50k, so the system is write-heavy.
-On the other hand, read traffic is low as raw data is mostly used as backup if anything goes wrong.
+원시 데이터의 평균 QPS는 10,000이고 최대 QPS는 50,000이므로 시스템은 쓰기 중심이다.
+반면 원시 데이터는 주로 문제가 생겼을 때 백업으로 사용하므로 읽기 트래픽은 낮다.
 
-Relational databases can do the job, but it can be challenging to scale the writes. 
-Alternatively, we can use Cassandra or InfluxDB which have better native support for heavy write loads.
+관계형 데이터베이스로도 처리할 수 있지만 쓰기를 확장하기 어려울 수 있다.
+대안으로 대규모 쓰기 부하를 기본적으로 더 잘 지원하는 Cassandra나 InfluxDB를 사용할 수 있다.
 
-Another option is to use Amazon S3 with a columnar data format like ORC, Parquet or AVRO. Since this setup is unfamiliar, we'll stick to Cassandra.
+또 다른 선택지는 ORC, Parquet, AVRO 같은 컬럼형 데이터 형식과 Amazon S3를 사용하는 것이다. 이 구성은 익숙하지 않으므로 Cassandra를 사용한다.
 
-For aggregated data, the workload is both read and write heavy as aggregated data is constantly queried for dashboards and alerts.
-It is also write-heavy as data is aggregated and written every minute by the aggregation service. 
-Hence, we'll use the same data store (Cassandra) here as well.
+집계 데이터는 대시보드와 경고에서 계속 조회하므로 워크로드가 읽기와 쓰기 모두 많다.
+집계 서비스가 1분마다 데이터를 집계해 쓰기 때문에 쓰기도 많다.
+따라서 여기에도 같은 데이터 저장소인 Cassandra를 사용한다.
 
-### **High-level design**
-Here's how our system looks like:
-
-<div style="margin-left:3rem">
-    <img src="./images/high-level-design-1.png" alt="high-level-design-1" width="500" />
-</div>
-
-Data flows as an unbounded data stream on both inputs and outputs.
-
-In order to avoid having a synchronous sink, where a consumer crashing can cause the whole system to stall, 
-we'll leverage asynchronous processing using message queues (Kafka) to decouple consumers and producers.
+### **개략적 설계**
+시스템은 다음과 같은 모습이다.
 
 <div style="margin-left:3rem">
-    <img src="./images/high-level-design-2.png" alt="high-level-design-2" width="500" />
+    <img src="./images/high-level-design-1.png" alt="개략적 설계 1" width="500" />
 </div>
 
-The first message queue stores ad click event data:
+데이터는 입력과 출력 양쪽에서 경계가 없는 데이터 스트림으로 흐른다.
+
+소비자가 중단될 때 전체 시스템이 멈출 수 있는 동기식 싱크를 피하기 위해 메시지 큐(Kafka)를 사용한 비동기 처리로 소비자와 생산자를 분리한다.
+
+<div style="margin-left:3rem">
+    <img src="./images/high-level-design-2.png" alt="개략적 설계 2" width="500" />
+</div>
+
+첫 번째 메시지 큐에는 광고 클릭 이벤트 데이터를 저장한다.
 | ad_id | click_timestamp | user_id | ip | country |
 |-------|-----------------|---------|----|---------|
 
-The second message queue contains ad click counts, aggregated per-minute:
+두 번째 메시지 큐에는 1분 단위로 집계한 광고 클릭 수를 저장한다.
 | ad_id | click_minute | count |
 |-------|--------------|-------|
 
-As well as top N clicked ads aggregated per minute:
+또한 1분 단위로 집계한 클릭 상위 N개 광고도 저장한다.
 | update_time_minute | most_clicked_ads |
 |--------------------|------------------|
 
-The second message queue is there in order to achieve end to end exactly-once atomic commit semantics:
+두 번째 메시지 큐는 종단 간 정확히 한 번(exactly-once) 원자적 커밋 의미 체계를 달성하기 위해 존재한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/atomic-commit.png" alt="atomic-commit" width="500" />
+    <img src="./images/atomic-commit.png" alt="원자적 커밋" width="500" />
 </div>
 
-For the aggregation service, using the MapReduce framework is a good option:
+집계 서비스에는 MapReduce 프레임워크가 좋은 선택이다.
 
 <div style="margin-left:3rem">
-    <img src="./images/ad-count-map-reduce.png" alt="ad-count-map-reduce" width="500" />
+    <img src="./images/ad-count-map-reduce.png" alt="광고 수 맵리듀스" width="500" />
 </div>
 
 <div style="margin-left:3rem">
-    <img src="./images/top-100-map-reduce.png" alt="top-100-map-reduce" width="500" />
+    <img src="./images/top-100-map-reduce.png" alt="상위 100개 맵리듀스" width="500" />
 </div>
 
-Each node is responsible for one single task and it sends the processing result to the downstream node.
+각 노드는 하나의 작업을 담당하며 처리 결과를 다운스트림 노드로 보낸다.
 
-The map node is responsible for reading from the data source, then filtering and transforming the data.
+맵 노드는 데이터 소스에서 데이터를 읽고 필터링 및 변환한다.
 
-For example, the map node can allocate data across different aggregation nodes based on the `ad_id`:
+예를 들어 맵 노드는 `ad_id`를 기준으로 서로 다른 집계 노드에 데이터를 할당할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/map-node.png" alt="map-node" width="500" />
+    <img src="./images/map-node.png" alt="맵 노드" width="500" />
 </div>
 
-Alternatively, we can distribute ads across Kafka partitions and let the aggregation nodes subscribe directly within a consumer group.
-However, the mapping node enables us to sanitize or transform the data before subsequent processing.
+대안으로 광고를 Kafka 파티션에 분산하고 집계 노드가 소비자 그룹 안에서 직접 구독하도록 할 수 있다.
+하지만 맵 노드를 사용하면 후속 처리 전에 데이터를 정제하거나 변환할 수 있다.
 
-Another reason might be that we don't have control over how data is produced, 
-so events related to the same `ad_id` might go on different partitions.
+또 다른 이유는 데이터 생성 방식을 제어하지 못해 같은 `ad_id`와 관련된 이벤트가 서로 다른 파티션으로 갈 수 있기 때문이다.
 
-The aggregate node counts ad click events by `ad_id` in-memory every minute.
+집계 노드는 1분마다 메모리에서 `ad_id`별 광고 클릭 이벤트 수를 센다.
 
-The reduce node collects aggregated results from aggregate node and produces the final result:
+리듀스 노드는 집계 노드에서 집계 결과를 모아 최종 결과를 생성한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/reduce-node.png" alt="reduce-node" width="500" />
+    <img src="./images/reduce-node.png" alt="리듀스 노드" width="500" />
 </div>
 
-This DAG model uses the MapReduce paradigm. It takes big data and leverages parallel distributed computing to turn it into regular-sized data.
+이 DAG 모델은 MapReduce 패러다임을 사용한다. 빅데이터를 입력으로 받아 병렬 분산 컴퓨팅을 활용해 일반적인 크기의 데이터로 변환한다.
 
-In the DAG model, intermediate data is stored in-memory and different nodes communicate with each other using TCP or shared memory.
+DAG 모델에서는 중간 데이터를 메모리에 저장하고 여러 노드가 TCP 또는 공유 메모리로 통신한다.
 
-Let's explore how this model can now help us to achieve our various use-cases.
+이제 이 모델이 여러 사용 사례를 어떻게 지원하는지 살펴본다.
 
-**Use-case 1 - aggregate the number of clicks**:
+**사용 사례 1 - 클릭 수 집계**
 
 <div style="margin-left:3rem">
-    <img src="./images/use-case-1.png" alt="use-case-1" width="500" />
+    <img src="./images/use-case-1.png" alt="사용 사례 1" width="500" />
 </div>
 
- - Ads are partitioned using `ad_id % 3`
+ - `ad_id % 3`을 사용해 광고를 파티셔닝한다.
 
-**Use-case 2 - return top N most clicked ads**:
+**사용 사례 2 - 가장 많이 클릭된 광고 상위 N개 반환**
 
 <div style="margin-left:3rem">
-    <img src="./images/use-case-2.png" alt="use-case-2" width="500" />
+    <img src="./images/use-case-2.png" alt="사용 사례 2" width="500" />
 </div>
 
- - In this case, we're aggregating the top 3 ads, but this can be extended to top N ads easily
- - Each node maintains a heap data structure for fast retrieval of top N ads
+ - 여기서는 광고 상위 3개를 집계하지만 광고 상위 N개로 쉽게 확장할 수 있다.
+ - 각 노드는 광고 상위 N개를 빠르게 가져오기 위해 힙 자료 구조를 유지한다.
 
-**Use-case 3 - data filtering**:
-To support fast data filtering, we can predefine filtering criterias and pre-aggregate based on it:
+**사용 사례 3 - 데이터 필터링**
+빠른 데이터 필터링을 지원하려면 필터링 기준을 미리 정의하고 이를 바탕으로 사전 집계할 수 있다.
 | ad_id | click_minute | country | count |
 |-------|--------------|---------|-------|
 | ad001 | 202101010001 | USA     | 100   |
@@ -266,284 +264,284 @@ To support fast data filtering, we can predefine filtering criterias and pre-agg
 | ad002 | 202101010001 | GPB     | 25    |
 | ad002 | 202101010001 | others  | 12    |
 
-This technique is called the **star schema** and is widely used in data warehouses.
-The filtering fields are called **dimensions**.
+이 기법을 **스타 스키마(star schema)**라고 하며 데이터 웨어하우스에서 널리 사용한다.
+필터링 필드는 **차원(dimension)**이라고 한다.
 
-This approach has the following benefits:
- - Simple to undertand and build
- - Current aggregation service can be reused to create more dimensions in the star schema.
- - Accessing data based on filtering criteria is fast as results are pre-calculated
+이 접근 방식의 장점은 다음과 같다.
+ - 이해하고 구축하기 쉽다.
+ - 현재 집계 서비스를 재사용해 스타 스키마에 더 많은 차원을 만들 수 있다.
+ - 결과를 미리 계산하므로 필터링 기준에 따른 데이터 접근이 빠르다.
 
-A limitation of this approach is that it creates many more buckets and records, especially when we have lots of filtering criterias.
+이 접근 방식의 한계는 특히 필터링 기준이 많을 때 버킷과 레코드가 훨씬 많이 생성된다는 것이다.
 
 ---
 
-## Step 3: Design Deep Dive
-Let's dive deeper into some of the more interesting topics.
+## 3단계: 상세 설계
+몇 가지 더 흥미로운 주제를 자세히 살펴본다.
 
-### **Streaming vs. Batching**
-The high-level architecture we proposed is a type of stream processing system. 
-Here's a comparison between three types of systems:
-|                         | Services (Online system)      | Batch system (offline system)                          | Streaming system (near real-time system)     |
+### **스트리밍과 배치 처리 비교**
+제안한 개략적 아키텍처는 스트림 처리 시스템의 한 유형이다.
+세 가지 유형의 시스템을 비교하면 다음과 같다.
+|                         | 서비스(온라인 시스템)      | 배치 시스템(오프라인 시스템)                          | 스트리밍 시스템(준실시간 시스템)     |
 |-------------------------|-------------------------------|--------------------------------------------------------|----------------------------------------------|
-| Responsiveness          | Respond to the client quickly | No response to the client needed                       | No response to the client needed             |
-| Input                   | User requests                 | Bounded input with finite size. A large amount of data | Input has no boundary (infinite streams)     |
-| Output                  | Responses to clients          | Materialized views, aggregated metrics, etc.           | Materialized views, aggregated metrics, etc. |
-| Performance measurement | Availability, latency         | Throughput                                             | Throughput, latency                          |
-| Example                 | Online shopping               | MapReduce                                              | Flink [13]                                   |
+| 응답성          | 클라이언트에 빠르게 응답 | 클라이언트에 응답할 필요 없음                       | 클라이언트에 응답할 필요 없음             |
+| 입력                   | 사용자 요청                 | 크기가 유한하고 경계가 있는 입력. 대량의 데이터 | 경계가 없는 입력(무한 스트림)     |
+| 출력                  | 클라이언트에 보내는 응답          | 구체화된 뷰, 집계 메트릭 등           | 구체화된 뷰, 집계 메트릭 등 |
+| 성능 측정 | 가용성, 지연 시간         | 처리량                                             | 처리량, 지연 시간                          |
+| 예시                 | 온라인 쇼핑               | MapReduce                                              | Flink [13]                                   |
 
-In our design, we used a mixture of batching and streaming. 
+이 설계에서는 배치 처리와 스트리밍을 함께 사용했다.
 
-We used streaming for processing data as it arrives and generates aggregated results in near real-time.
-We used batching, on the other hand, for historical data backup.
+도착하는 데이터를 처리하고 준실시간으로 집계 결과를 생성하는 데 스트리밍을 사용했다.
+반면 과거 데이터 백업에는 배치 처리를 사용했다.
 
-A system which contains two processing paths - batch and streaming, simultaneously, this architecture is called lambda.
-A disadvantage is that you have two processing paths with two different codebases to maintain.
+배치와 스트리밍이라는 두 처리 경로를 동시에 포함하는 시스템 아키텍처를 람다(Lambda)라고 한다.
+단점은 서로 다른 코드베이스로 구현된 두 처리 경로를 유지 관리해야 한다는 것이다.
 
-Kappa is an alternative architecture, which combines batch and stream processing in one processing path.
-The key idea is to use a single stream processing engine.
+카파(Kappa)는 배치 처리와 스트림 처리를 하나의 처리 경로로 결합하는 대체 아키텍처다.
+핵심 아이디어는 단일 스트림 처리 엔진을 사용하는 것이다.
 
-Lambda architecture:
-
-<div style="margin-left:3rem">
-    <img src="./images/lambda-architecture.png" alt="lambda-architecture" width="500" />
-</div>
-
-Kappa architecture:
+람다 아키텍처는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/kappa-architecture.png" alt="kappa-architecture" width="500" />
+    <img src="./images/lambda-architecture.png" alt="람다 아키텍처" width="500" />
 </div>
 
-Our high-level design uses Kappa architecture as reprocessing of historical data also goes through the aggregation service.
-
-Whenever we have to recalculate aggregated data due to eg a major bug in aggregation logic, we can recalculate the aggregation from the raw data we store.
- - Recalculation service retrieves data from raw storage. This is a batch job.
- - Retrieved data is sent to a dedicated aggregation service, so that the real-time processing aggregation service is not impacted.
- - Aggregated results are sent to the second message queue, after which we update the results in the aggregation database.
+카파 아키텍처는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/recalculation-example.png" alt="recalculation-example" width="500" />
+    <img src="./images/kappa-architecture.png" alt="카파 아키텍처" width="500" />
 </div>
 
-### **Time**
-We need a timestamp to perform aggregation. It can be generated in two places:
- - event time - when ad click occurs
- - Processing time - system time when the server processes the event
+과거 데이터 재처리도 집계 서비스를 통과하므로 이 개략적 설계는 카파 아키텍처를 사용한다.
 
-Due to the usage of async processing (message queues) and network delays, there can be significant difference between event time and processing time.
- - If we use processing time, aggregation results can be inaccurate
- - If we use event time, we have to deal with delayed events
+집계 로직의 중대한 버그 등으로 집계 데이터를 다시 계산해야 할 때마다 저장한 원시 데이터에서 집계를 재계산할 수 있다.
+ - 재계산 서비스가 원시 저장소에서 데이터를 가져온다. 이는 배치 작업이다.
+ - 실시간 처리 집계 서비스에 영향을 주지 않도록 가져온 데이터를 전용 집계 서비스로 보낸다.
+ - 집계 결과를 두 번째 메시지 큐로 보낸 뒤 집계 데이터베이스의 결과를 업데이트한다.
 
-There is no perfect solution, we need to consider trade-offs:
-|                 | Pros                                  | Cons                                                                                 |
+<div style="margin-left:3rem">
+    <img src="./images/recalculation-example.png" alt="재계산 예시" width="500" />
+</div>
+
+### **시간**
+집계를 수행하려면 타임스탬프가 필요하다. 두 위치에서 생성할 수 있다.
+ - 이벤트 시간 - 광고 클릭이 발생한 시각
+ - 처리 시간 - 서버가 이벤트를 처리할 때의 시스템 시각
+
+비동기 처리(메시지 큐)와 네트워크 지연으로 인해 이벤트 시간과 처리 시간 사이에 큰 차이가 생길 수 있다.
+ - 처리 시간을 사용하면 집계 결과가 부정확할 수 있다.
+ - 이벤트 시간을 사용하면 지연 이벤트를 처리해야 한다.
+
+완벽한 해결책은 없으므로 트레이드오프를 고려해야 한다.
+|                 | 장점                                  | 단점                                                                                 |
 |-----------------|---------------------------------------|--------------------------------------------------------------------------------------|
-| Event time      | Aggregation results are more accurate | Clients might have the wrong time or timestamp might be generated by malicious users |
-| Processing time | Server timestamp is more reliable     | The timestamp is not accurate if event is late                                       |
+| 이벤트 시간      | 집계 결과가 더 정확함 | 클라이언트의 시각이 틀리거나 악의적인 사용자가 타임스탬프를 생성할 수 있음 |
+| 처리 시간 | 서버 타임스탬프가 더 신뢰할 수 있음     | 이벤트가 늦으면 타임스탬프가 부정확함                                       |
 
-Since data accuracy is important, we'll use the event time for aggregation.
+데이터 정확성이 중요하므로 집계에는 이벤트 시간을 사용한다.
 
-To mitigate the issue of delayed events, a technique called "watermark" can be leveraged.
+지연 이벤트 문제를 완화하기 위해 "워터마크(watermark)"라는 기법을 사용할 수 있다.
 
-In the example below, event 2 misses the window where it needs to be aggregated:
+아래 예시에서 이벤트 2는 집계되어야 하는 윈도를 놓친다.
 
 <div style="margin-left:3rem">
-    <img src="./images/watermark-technique.png" alt="watermark-technique" width="500" />
+    <img src="./images/watermark-technique.png" alt="워터마크 기법" width="500" />
 </div>
 
-However, if we purposefully extend the aggregation window, we can reduce the likelihood of missed events.
-The extended part of a window is called a "watermark":
+하지만 집계 윈도를 의도적으로 늘리면 누락 이벤트가 발생할 가능성을 줄일 수 있다.
+윈도에서 연장된 부분을 "워터마크"라고 한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/watermark-2.png" alt="watermark-2" width="500" />
+    <img src="./images/watermark-2.png" alt="워터마크 2" width="500" />
 </div>
 
- - Short watermark increases likelihood of missed events, but reduces latency
- - Longer watermark reduces likelihood of missed events, but increases latency
+ - 짧은 워터마크는 이벤트 누락 가능성을 높이지만 지연 시간을 줄인다.
+ - 긴 워터마크는 이벤트 누락 가능성을 낮추지만 지연 시간을 늘린다.
 
-There is always likelihood of missed events, regardless of the watermark's size. But there is no use in optimizing for such low-probability events.
+워터마크 크기와 관계없이 이벤트가 누락될 가능성은 항상 있다. 하지만 발생 확률이 매우 낮은 이벤트를 최적화할 필요는 없다.
 
-We can instead resolve such inconsistencies by doing end-of-day reconciliation.
+대신 하루가 끝날 때 대사(reconciliation)를 수행해 이러한 불일치를 해결할 수 있다.
 
-### **Aggregation window**
-There are four types of window functions:
- - Tumbling (fixed) window
- - Hopping window
- - Sliding window
- - Session window
+### **집계 윈도**
+윈도 함수에는 네 가지 유형이 있다.
+ - 텀블링(고정) 윈도
+ - 호핑 윈도
+ - 슬라이딩 윈도
+ - 세션 윈도
 
-In our design, we leverage a tumbling window for ad click aggregations:
+이 설계에서는 광고 클릭 집계에 텀블링 윈도를 사용한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/tumbling-window.png" alt="tumbling-window" width="500" />
+    <img src="./images/tumbling-window.png" alt="텀블링 윈도" width="500" />
 </div>
 
-As well as a sliding window for the top N clicked ads in M minutes aggregation:
+또한 M분 동안 클릭된 광고 상위 N개 집계에는 슬라이딩 윈도를 사용한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/sliding-window.png" alt="sliding-window" width="500" />
+    <img src="./images/sliding-window.png" alt="슬라이딩 윈도" width="500" />
 </div>
 
-### **Delivery guarantees**
-Since the data we're aggregating is going to be used for billing, data accuracy is a priority.
+### **전달 보장**
+집계 데이터는 비용 청구에 사용하므로 데이터 정확성이 최우선이다.
 
-Hence, we need to discuss:
- - How to avoid processing duplicate events
- - How to ensure all events are processed
+따라서 다음을 논의해야 한다.
+ - 중복 이벤트 처리를 피하는 방법
+ - 모든 이벤트가 처리되도록 보장하는 방법
 
-There are three delivery guarantees we can use - at-most-once, at-least-once and exactly once.
+사용할 수 있는 전달 보장은 최대 한 번(at-most-once), 최소 한 번(at-least-once), 정확히 한 번(exactly-once)의 세 가지다.
 
-In most circumstances, at-least-once is sufficient when a small amount of duplicates is acceptable.
-This is not the case for our system, though, as a difference in small percent can result in millions of dollars of discrepancy.
-Hence, we'll need to use exactly-once delivery semantics.
+대부분의 상황에서는 소량의 중복을 허용할 수 있다면 최소 한 번으로 충분하다.
+하지만 이 시스템에서는 아주 작은 비율의 차이도 수백만 달러의 불일치를 낳을 수 있으므로 그렇지 않다.
+따라서 정확히 한 번 전달 의미 체계를 사용해야 한다.
 
-### **Data deduplication**
-One of the most common data quality issues is duplicated data.
+### **데이터 중복 제거**
+가장 흔한 데이터 품질 문제 중 하나는 데이터 중복이다.
 
-It can come from a wide range of sources:
- - Client-side - a client might resend the same event multiple times. Duplicated events sent with malicious intent are best handled by a risk engine.
- - Server outage - An aggregation service node goes down in the middle of aggregation and the upstream service hasn't received an acknowledgment so event is resent.
+중복은 다양한 원인에서 발생할 수 있다.
+ - 클라이언트 측. 클라이언트가 같은 이벤트를 여러 번 다시 보낼 수 있다. 악의적으로 전송한 중복 이벤트는 리스크 엔진으로 처리하는 것이 가장 좋다.
+ - 서버 장애. 집계 서비스 노드가 집계 도중 중단되고 업스트림 서비스가 확인 응답을 받지 못해 이벤트를 다시 보낸다.
 
-Here's an example of data duplication occurring due to failure to acknowledge an event on the last hop:
+마지막 홉에서 이벤트 확인 응답에 실패해 데이터 중복이 발생하는 예시는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/data-duplication-example.png" alt="data-duplication-example" width="500" />
+    <img src="./images/data-duplication-example.png" alt="데이터 중복 예시" width="500" />
 </div>
 
-In this example, offset 100 will be processed and sent downstream multiple times.
+이 예시에서는 오프셋 100을 여러 번 처리해 다운스트림 시스템으로 보낸다.
 
-One option to try and mitigate this is to store the last seen offset in HDFS/S3, but this risks the result never reaching downstream:
+이를 완화하는 한 가지 방법은 마지막으로 확인한 오프셋을 HDFS/S3에 저장하는 것이지만, 결과가 다운스트림 시스템에 도달하지 못할 위험이 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/data-duplication-example-2.png" alt="data-duplication-example-2" width="500" />
+    <img src="./images/data-duplication-example-2.png" alt="데이터 중복 예시 2" width="500" />
 </div>
 
-Finally, we can store the offset while interacting with downstream atomically. To achieve this, we need to implement a distributed transaction:
+마지막으로 다운스트림 시스템과 상호작용하면서 오프셋을 원자적으로 저장할 수 있다. 이를 위해 분산 트랜잭션을 구현해야 한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/data-duplication-example-3.png" alt="data-duplication-example-3" width="500" />
+    <img src="./images/data-duplication-example-3.png" alt="데이터 중복 예시 3" width="500" />
 </div>
 
-**Personal side-note**: Alternatively, if the downstream system handles the aggregation result idempotently, there is no need for a distributed transaction.
+**개인적인 부연**: 대안으로 다운스트림 시스템이 집계 결과를 멱등하게 처리한다면 분산 트랜잭션이 필요 없다.
 
-### **Scale the system**
-Let's discuss how we scale the system as it grows.
+### **시스템 확장**
+시스템이 성장할 때 확장하는 방법을 논의한다.
 
-We have three independent components - message queue, aggregation service and database.
-Since they are decoupled, we can scale them independently.
+메시지 큐, 집계 서비스, 데이터베이스라는 독립적인 구성 요소 세 개가 있다.
+서로 분리되어 있으므로 독립적으로 확장할 수 있다.
 
-How do we scale the message queue:
- - We don't put a limit on producers, so they can be scaled easily
- - Consumers can be scaled by assigning them to consumer groups and increasing the number of consumers.
- - For this to work, we also need to ensure there are enough partitions created preemptively
- - Also, consumer rebalancing can take a while when there are thousands of consumers so it is recommended to do it off peak hours
- - We could also consider partitioning the topic by geography, eg `topic_na`, `topic_eu`, etc.
+메시지 큐를 확장하는 방법은 다음과 같다.
+ - 생산자 수를 제한하지 않으므로 쉽게 확장할 수 있다.
+ - 소비자를 소비자 그룹에 할당하고 소비자 수를 늘려 확장할 수 있다.
+ - 이 방식이 작동하려면 충분한 수의 파티션을 미리 생성해야 한다.
+ - 또한 소비자가 수천 개면 소비자 리밸런싱에 시간이 오래 걸릴 수 있으므로 비혼잡 시간대에 수행하는 것이 좋다.
+ - 토픽을 지역별로 파티셔닝하는 방법도 고려할 수 있다. 예를 들어 `topic_na`, `topic_eu` 등이 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/scale-consumers.png" alt="scale-consumers" width="500" />
+    <img src="./images/scale-consumers.png" alt="소비자 확장" width="500" />
 </div>
 
-How do we scale the aggregation service:
+집계 서비스를 확장하는 방법은 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/aggregation-service-scaling.png" alt="aggregation-service-scaling" width="500" />
+    <img src="./images/aggregation-service-scaling.png" alt="집계 서비스 확장" width="500" />
 </div>
 
- - The map-reduce nodes can easily be scaled by adding more nodes
- - The throughput of the aggregation service can be scaled by by utilising multi-threading
- - Alternatively, we can leverage resource providers such as Apache YARN to utilize multi-processing
- - Option 1 is easier, but option 2 is more widely used in practice as it's more scalable
- - Here's the multi-threading example:
+ - MapReduce 노드는 노드를 추가해 쉽게 확장할 수 있다.
+ - 멀티스레딩을 활용해 집계 서비스의 처리량을 늘릴 수 있다.
+ - 대안으로 Apache YARN 같은 리소스 제공자를 활용해 멀티프로세싱을 사용할 수 있다.
+ - 선택지 1은 더 쉽지만 선택지 2는 확장성이 더 뛰어나 실제로 더 널리 사용한다.
+ - 멀티스레딩 예시는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/multi-threading-example.png" alt="multi-threading-example" width="500" />
+    <img src="./images/multi-threading-example.png" alt="멀티스레딩 예시" width="500" />
 </div>
 
-How do we scale the database:
- - If we use Cassandra, it natively supports horizontal scaling utilizing consistent hashing
- - If a new node is added to the cluster, data automatically gets rebalanced across all (virtual) nodes
- - With this approach, no manual (re)sharding is required
+데이터베이스를 확장하는 방법은 다음과 같다.
+ - Cassandra를 사용하면 일관된 해싱을 활용한 수평 확장을 기본으로 지원한다.
+ - 클러스터에 새 노드를 추가하면 데이터가 모든 가상 노드에 자동으로 다시 분산된다.
+ - 이 접근 방식에서는 수동으로 샤딩하거나 다시 샤딩할 필요가 없다.
 
 <div style="margin-left:3rem">
-    <img src="./images/cassandra-scalability.png" alt="cassandra-scalability" width="500" />
+    <img src="./images/cassandra-scalability.png" alt="Cassandra 확장성" width="500" />
 </div>
 
-Another scalability issue to consider is the hotspot issue - what if an ad is more popular and gets more attention than others?
+고려할 또 다른 확장성 문제는 핫스팟이다. 특정 광고가 다른 광고보다 인기가 많아 더 많은 관심을 받으면 어떻게 될까?
 
 <div style="margin-left:3rem">
-    <img src="./images/hotspot-issue.png" alt="hotspot-issue" width="500" />
+    <img src="./images/hotspot-issue.png" alt="핫스팟 문제" width="500" />
 </div>
 
- - In the above example, aggregation service nodes can apply for extra resources via the resource manager
- - The resource manager allocates more resources, so the original node isn't overloaded
- - The original node splits the events into 3 groups and each of the aggregation nodes handles 100 events
- - Result is written back to the original aggregation node
+ - 위 예시에서 집계 서비스 노드는 리소스 관리자를 통해 추가 리소스를 요청할 수 있다.
+ - 리소스 관리자가 더 많은 리소스를 할당하므로 원래 노드에 과부하가 걸리지 않는다.
+ - 원래 노드가 이벤트를 세 그룹으로 나누고 각 집계 노드가 이벤트 100개를 처리한다.
+ - 결과는 원래 집계 노드에 다시 기록한다.
 
-Alternative, more sophisticated ways to handle the hotspot problem:
- - Global-Local Aggregation
- - Split Distinct Aggregation
+핫스팟 문제를 처리하는 더 정교한 대체 방법은 다음과 같다.
+ - 전역-로컬 집계(Global-Local Aggregation)
+ - 고유 집계 분할(Split Distinct Aggregation)
 
-### **Fault Tolerance**
-Within the aggregation nodes, we are processing data in-memory. If a node goes down, the processed data is lost.
+### **내결함성**
+집계 노드 안에서는 데이터를 메모리에서 처리한다. 노드가 중단되면 처리한 데이터가 손실된다.
 
-We can leverage consumer offsets in kafka to continue from where we left off once another node picks up the slack.
-However, there is additional intermediary state we need to maintain, as we're aggregating the top N ads in M minutes.
+다른 노드가 작업을 이어받으면 Kafka의 소비자 오프셋을 활용해 중단한 지점부터 계속할 수 있다.
+하지만 M분 동안 광고 상위 N개를 집계하므로 유지해야 할 추가 중간 상태가 있다.
 
-We can make snapshots at a particular minute for the on-going aggregation:
+진행 중인 집계 상태를 특정 분 단위로 스냅샷에 저장할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/fault-tolerance-example.png" alt="fault-tolerance-example" width="500" />
+    <img src="./images/fault-tolerance-example.png" alt="내결함성 예시" width="500" />
 </div>
 
-If a node goes down, the new node can read the latest committed consumer offset, as well as the latest snapshot to continue the job:
+노드가 중단되면 새 노드가 마지막으로 커밋된 소비자 오프셋과 최신 스냅샷을 읽어 작업을 계속할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/fault-tolerance-recovery-example.png" alt="fault-tolerance-recovery-example" width="500" />
+    <img src="./images/fault-tolerance-recovery-example.png" alt="내결함성 복구 예시" width="500" />
 </div>
 
-### **Data monitoring and correctness**
-As the data we're aggregating is critical as it's used for billing, it is very important to have rigorous monitoring in place in order to ensure correctness.
+### **데이터 모니터링과 정확성**
+집계 데이터는 비용 청구에 사용되는 중요한 데이터이므로 정확성을 보장하기 위해 엄격한 모니터링을 마련하는 것이 매우 중요하다.
 
-Some metrics we might want to monitor:
- - **Latency**: Timestamps of different events can be tracked in order to understand the e2e latency of the system
- - **Message queue size**: If there is a sudden increase in queue size, we need to add more aggregation nodes. As Kafka is implemented via a distributed commit log, we need to keep track of records-lag metrics instead.
- - **System resources on aggregation nodes**: CPU, disk, JVM, etc.
+모니터링할 수 있는 메트릭은 다음과 같다.
+ - **지연 시간** - 여러 이벤트의 타임스탬프를 추적해 시스템의 종단 간 지연 시간을 파악할 수 있다.
+ - **메시지 큐 크기** - 큐 크기가 갑자기 증가하면 집계 노드를 더 추가해야 한다. Kafka는 분산 커밋 로그로 구현되므로 대신 records-lag 메트릭을 추적해야 한다.
+ - **집계 노드의 시스템 리소스** - CPU, 디스크, JVM 등이 있다.
 
-We also need to implement a reconciliation flow which is a batch job, running at the end of the day. 
-It calculates the aggregated results from the raw data and compares them against the actual data stored in the aggregation database:
+또한 하루가 끝날 때 실행되는 배치 작업인 대사 흐름을 구현해야 한다.
+원시 데이터에서 집계 결과를 계산한 뒤 집계 데이터베이스에 실제로 저장된 데이터와 비교한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/reconciliation-flow.png" alt="reconciliation-flow" width="500" />
+    <img src="./images/reconciliation-flow.png" alt="대사 흐름" width="500" />
 </div>
 
-### **Alternative design**
-In a generalist system design interview, you are not expected to know the internals of specialized software used in big data processing.
+### **대체 설계**
+범용 시스템 설계 면접에서는 빅데이터 처리에 사용하는 전문 소프트웨어의 내부 구조까지 알 필요는 없다.
 
-Explaining the thought process and discussing trade-offs is more important than knowing specific tools, which is why the chapter covers a generic solution.
+특정 도구를 아는 것보다 사고 과정을 설명하고 트레이드오프를 논의하는 것이 더 중요하므로 이 장에서는 일반적인 해결책을 다룬다.
 
-An alternative design, which leverages off-the-shelf tooling, is to store ad click data in Hive with an ElasticSearch layer on top built for faster queries.
+즉시 사용할 수 있는 도구를 활용하는 대체 설계로 광고 클릭 데이터를 Hive에 저장하고 더 빠른 쿼리를 위해 그 위에 ElasticSearch 계층을 구축할 수 있다.
 
-Aggregation is typically done in OLAP databases such as ClickHouse or Druid.
+집계는 일반적으로 ClickHouse나 Druid 같은 OLAP 데이터베이스에서 수행한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/alternative-design.png" alt="alternative-design" width="500" />
+    <img src="./images/alternative-design.png" alt="대체 설계" width="500" />
 </div>
 
 ---
 
-## Step 4: Wrap up
-Things we covered:
- - Data model and API Design
- - Using MapReduce to aggregate ad click events
- - Scaling the message queue, aggregation service and database
- - Mitigating the hotspot issue
- - Monitoring the system continuously
- - Using reconciliation to ensure correctness
- - Fault tolerance
+## 4단계: 마무리
+다룬 내용은 다음과 같다.
+ - 데이터 모델과 API 설계
+ - MapReduce를 사용한 광고 클릭 이벤트 집계
+ - 메시지 큐, 집계 서비스, 데이터베이스 확장
+ - 핫스팟 문제 완화
+ - 지속적인 시스템 모니터링
+ - 정확성 보장을 위한 대사 사용
+ - 내결함성
 
-The ad click event aggregation is a typical big data processing system.
+광고 클릭 이벤트 집계는 전형적인 빅데이터 처리 시스템이다.
 
-It would be easier to understand and design it if you have prior knowledge of related technologies:
+관련 기술에 대한 사전 지식이 있으면 이해하고 설계하기 더 쉽다.
  - Apache Kafka
  - Apache Spark
  - Apache Flink

@@ -1,77 +1,77 @@
-# Chapter 26: Payment System
+# 26장: 결제 시스템
 
-## Introduction
-We'll design a **payment system** in this chapter, which underpins all of modern **e-commerce**.
+## 소개
+이 장에서는 모든 현대 **전자상거래**의 기반이 되는 **결제 시스템**을 설계한다.
 
-A **payment system** is used to settle financial transactions, transferring monetary value.
-
----
-
-## Step 1: Understand the Problem and Establish Design Scope
- * C: What kind of payment system are we building?
- * I: A payment backend for an e-commerce system, similar to Amazon.com. It handles everything related to money movement.
- * C: What payment options are supported - Credit cards, PayPal, bank cards, etc?
- * I: The system should support all these options in real life. For the purposes of the interview, we can use credit card payments.
- * C: Do we handle credit card processing ourselves?
- * I: No, we use a third-party provider like Stripe, Braintree, Square, etc.
- * C: Do we store credit card data in our system?
- * I: Due to compliance reasons, we do not store credit card data directly in our systems. We rely on third-party payment processors.
- * C: Is the application global? Do we need to support different currencies and international payments?
- * I: The application is global, but we assume only one currency is used for the purposes of the interview.
- * C: How many payment transactions per day do we support?
- * I: 1mil transactions per day.
- * C: Do we need to support the payout flow to eg payout to payers each month?
- * I: Yes, we need to support that
- * C: Is there anything else I should pay attention to?
- * I: We need to support reconciliations to fix any inconsistencies in communicating with internal and external systems.
-
-### **Functional requirements**
- * Pay-in flow - payment system receives money from customers on behalf of merchants
- * Pay-out flow - payment system sends money to sellers around the world
-
-### **Non-functional requirements**
- * Reliability and fault-tolerance. Failed payments need to be carefully handled
- * A reconciliation between internal and external systems needs to be setup.
-
-### **Back-of-the-envelope estimation**
-The system needs to process 1mil transactions per day, which is 10 transactions per second.
-
-This is not a high throughput for any database system, so it's not the focus of this interview.
+**결제 시스템**은 금전적 가치를 이전해 금융 거래를 정산하는 데 사용된다.
 
 ---
 
-## Step 2: Propose High-Level Design and Get Buy-In
-At a high-level, we have three actors, participating in money movement:
+## 1단계: 문제 이해 및 설계 범위 확정
+ * 지원자: 어떤 종류의 결제 시스템을 구축하는가?
+ * 면접관: Amazon.com과 유사한 전자상거래 시스템의 결제 백엔드이다. 자금 이동과 관련된 모든 것을 처리한다.
+ * 지원자: 신용 카드, PayPal, 은행 카드 등 어떤 결제 수단을 지원하는가?
+ * 면접관: 실제 시스템은 이 모든 수단을 지원해야 한다. 면접에서는 신용 카드 결제를 사용하면 된다.
+ * 지원자: 신용 카드 처리를 직접 수행하는가?
+ * 면접관: 아니다. Stripe, Braintree, Square 같은 타사 제공업체를 사용한다.
+ * 지원자: 시스템에 신용 카드 데이터를 저장하는가?
+ * 면접관: 규정 준수 문제로 인해 신용 카드 데이터를 시스템에 직접 저장하지 않는다. 타사 결제 처리업체에 의존한다.
+ * 지원자: 애플리케이션이 전 세계에서 사용되는가? 여러 통화와 국제 결제를 지원해야 하는가?
+ * 면접관: 애플리케이션은 전 세계에서 사용되지만, 면접에서는 하나의 통화만 사용한다고 가정한다.
+ * 지원자: 하루에 몇 건의 결제 거래를 지원하는가?
+ * 면접관: 하루 100만 건의 거래이다.
+ * 지원자: 예를 들어 매월 지급 대상자에게 지급하는 지급(pay-out) 흐름도 지원해야 하는가?
+ * 면접관: 그렇다. 이를 지원해야 한다.
+ * 지원자: 그 밖에 주의해야 할 사항이 있는가?
+ * 면접관: 내부 및 외부 시스템과 통신할 때 발생하는 불일치를 수정하기 위해 대사(reconciliation)를 지원해야 한다.
+
+### **기능 요구사항**
+ * 입금(pay-in) 흐름 - 결제 시스템이 판매자를 대신해 고객에게서 돈을 받는다.
+ * 지급(pay-out) 흐름 - 결제 시스템이 전 세계의 판매자에게 돈을 보낸다.
+
+### **비기능 요구사항**
+ * 신뢰성과 내결함성을 보장한다. 실패한 결제를 신중하게 처리해야 한다.
+ * 내부 시스템과 외부 시스템 간 대사를 구성해야 한다.
+
+### **개략적 규모 추정**
+시스템은 하루 100만 건, 즉 초당 10건의 거래를 처리해야 한다.
+
+이는 어떤 데이터베이스 시스템에서도 높은 처리량이 아니므로 이 면접의 중점 사항이 아니다.
+
+---
+
+## 2단계: 개략적 설계안 제시 및 동의 구하기
+개략적으로 자금 이동에는 세 가지 주체가 참여한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/high-level-flow.png" alt="high-level-flow" width="500" />
+    <img src="./images/high-level-flow.png" alt="개략적 흐름" width="500" />
 </div>
 
-### **Pay-in flow**
-Here's the high-level overview of the pay-in flow:
+### **입금 흐름**
+입금 흐름의 개략적인 모습은 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/payin-flow-high-level.png" alt="pay-in-flow-high-level" width="500" />
+    <img src="./images/payin-flow-high-level.png" alt="입금 흐름 개요" width="500" />
 </div>
 
- * Payment service - accepts payment events and coordinates the payment process. It typically also does a risk check using a third-party provider for AML violations or criminal activity.
- * Payment executor - executes a single payment order via the Payment Service Provider (PSP). Payment events may contain several payment orders.
- * Payment service provider (PSP) - moves money from one account to another, eg from buyer's credit card account to e-commerce site's bank account.
- * Card schemes - organizations that process credit card operations, eg Visa MasterCard, etc.
- * Ledger - keeps financial record of all payment transactions.
- * Wallet - keeps the account balance for all merchants.
+ * 결제 서비스 - 결제 이벤트를 받아 결제 프로세스를 조율한다. 일반적으로 타사 제공업체를 이용해 자금세탁방지(AML) 규정 위반이나 범죄 활동에 대한 위험 검사도 수행한다.
+ * 결제 실행기 - 결제 서비스 제공업체(Payment Service Provider, PSP)를 통해 단일 결제 주문을 실행한다. 결제 이벤트에는 여러 결제 주문이 포함될 수 있다.
+ * 결제 서비스 제공업체(PSP) - 구매자의 신용 카드 계좌에서 전자상거래 사이트의 은행 계좌로 옮기는 것처럼 한 계좌에서 다른 계좌로 돈을 이동한다.
+ * 카드 네트워크 - Visa, MasterCard 등 신용 카드 업무를 처리하는 조직이다.
+ * 원장 - 모든 결제 거래의 재무 기록을 보관한다.
+ * 지갑 - 모든 판매자의 계좌 잔액을 보관한다.
 
-Here's an example pay-in flow:
- * user clicks "place order" and a payment event is sent to the payment service
- * payment service stores the event in its database
- * payment service calls the payment executor for all payment orders, part of that payment event
- * payment executor stores the payment order in its database
- * payment executor calls external PSP to process the credit card payment
- * After the payment executor processes the payment, the payment service updates the wallet to record how much money the seller has
- * wallet service stores updated balance information in its database
- * payment service calls the ledger to record all money movements
+입금 흐름의 예시는 다음과 같다.
+ * 사용자가 "주문하기"를 클릭하면 결제 이벤트가 결제 서비스로 전송된다.
+ * 결제 서비스가 이벤트를 데이터베이스에 저장한다.
+ * 결제 서비스가 해당 결제 이벤트에 속한 모든 결제 주문에 대해 결제 실행기를 호출한다.
+ * 결제 실행기가 결제 주문을 데이터베이스에 저장한다.
+ * 결제 실행기가 외부 PSP를 호출해 신용 카드 결제를 처리한다.
+ * 결제 실행기가 결제를 처리한 후 결제 서비스가 지갑을 갱신해 판매자가 보유한 금액을 기록한다.
+ * 지갑 서비스가 갱신된 잔액 정보를 데이터베이스에 저장한다.
+ * 결제 서비스가 원장을 호출해 모든 자금 이동을 기록한다.
 
-### **APIs for payment service**
+### **결제 서비스 API**
 ```
 POST /v1/payments
 {
@@ -82,7 +82,7 @@ POST /v1/payments
 }
 ```
 
-Example `payment_order`:
+`payment_order` 예시는 다음과 같다.
 ```
 {
   "seller_account": "SELLER_IBAN",
@@ -92,240 +92,240 @@ Example `payment_order`:
 }
 ```
 
-Caveats:
- * The `payment_order_id` is forwarded to the PSP to deduplicate payments, ie it is the idempotency key.
- * The amount field is `string` as `double` is not appropriate for representing monetary values.
+유의사항은 다음과 같다.
+ * `payment_order_id`는 결제 중복을 제거하도록 PSP에 전달된다. 즉, 멱등성 키이다.
+ * `amount` 필드는 `string`이다. `double`은 금전적 값을 표현하기에 적합하지 않다.
 
 ```
 GET /v1/payments/{:id}
 ```
 
-This endpoint returns the execution status of a single payment, based on the `payment_order_id`.
+이 엔드포인트는 `payment_order_id`를 기준으로 단일 결제의 실행 상태를 반환한다.
 
-### **Payment service data model**
-We need to maintain two tables - `payment_events` and `payment_orders`.
+### **결제 서비스 데이터 모델**
+`payment_events`와 `payment_orders`라는 두 테이블을 유지해야 한다.
 
-For payments, performance is typically not an important factor. Strong consistency, however, is.
+결제에서는 일반적으로 성능이 중요한 요소가 아니다. 하지만 강한 일관성은 중요하다.
 
-Other considerations for choosing the database:
- * Strong market of DBAs to hire to administer the databaseS
- * Proven track-record where the database has been used by other big financial institutions
- * Richness of supporting tools
- * Traditional SQL over NoSQL/NewSQL for its ACID guarantees
+데이터베이스 선택 시 고려할 다른 사항은 다음과 같다.
+ * 데이터베이스를 관리할 DBA를 채용할 수 있는 탄탄한 인력 시장
+ * 다른 대형 금융 기관에서 데이터베이스를 사용해 온 검증된 실적
+ * 풍부한 지원 도구
+ * ACID 보장을 제공하는 전통적인 SQL을 NoSQL/NewSQL보다 선호
 
-Here's what the `payment_events` table contains:
- * `checkout_id` - string, primary key
- * `buyer_info` - string (personal note - prob a foreign key to another table is more appropriate)
- * `seller_info` - string (personal note - same remark as above)
- * `credit_card_info` - depends on card provider
+`payment_events` 테이블의 내용은 다음과 같다.
+ * `checkout_id` - string, 기본 키
+ * `buyer_info` - string(개인 메모: 다른 테이블을 참조하는 외래 키가 더 적절할 가능성이 높다)
+ * `seller_info` - string(개인 메모: 위와 같은 의견이다)
+ * `credit_card_info` - 카드 제공업체에 따라 다름
  * `is_payment_done` - boolean
 
-Here's what the `payment_orders` table contains:
- * `payment_order_id` - string, primary key
+`payment_orders` 테이블의 내용은 다음과 같다.
+ * `payment_order_id` - string, 기본 키
  * `buyer_account` - string
  * `amount` - string
  * `currency` - string
- * `checkout_id` - string, foreign key
- * `payment_order_status` - enum (`NOT_STARTED`, `EXECUTING`, `SUCCESS`, `FAILED`)
+ * `checkout_id` - string, 외래 키
+ * `payment_order_status` - enum(`NOT_STARTED`, `EXECUTING`, `SUCCESS`, `FAILED`)
  * `ledger_updated` - boolean
  * `wallet_updated` - boolean
 
-Caveats:
- * there are many payment orders, linked to a given payment event
- * we don't need the `seller_info` for the pay-in flow. That's required on pay-out only
- * `ledger_updated` and `wallet_updated` are updated when the respective service is called to record the result of a payment
- * payment transitions are managed by a background job, which checks updates of in-flight payments and triggers an alert if a payment is not processed in a reasonable timeframe
+유의사항은 다음과 같다.
+ * 하나의 결제 이벤트에 많은 결제 주문이 연결된다.
+ * 입금 흐름에는 `seller_info`가 필요하지 않다. 지급할 때만 필요하다.
+ * 결제 결과를 기록하기 위해 각 서비스를 호출하면 `ledger_updated`와 `wallet_updated`가 갱신된다.
+ * 결제 상태 전이는 백그라운드 작업이 관리한다. 이 작업은 진행 중인 결제의 갱신 상태를 확인하고 적절한 시간 안에 처리되지 않은 결제가 있으면 경고를 발생시킨다.
 
-### **Double-entry ledger system**
-The double-entry accounting mechanism is key to any payment system. It is a mechanism of tracking money movements by always applying money operations to two accounts, where one's account balance increases (credit) and the other decreases (debit):
+### **복식부기 원장 시스템**
+복식부기 회계 메커니즘은 모든 결제 시스템의 핵심이다. 자금 연산을 항상 두 계좌에 적용해 한 계좌의 잔액은 증가하고(대변), 다른 계좌의 잔액은 감소하도록(차변) 자금 이동을 추적하는 메커니즘이다.
 
-| Account | Debit | Credit |
+| 계정 | 차변 | 대변 |
 |---------|-------|--------|
-| buyer   | $1    |        |
-| seller  |       | $1     |
+| 구매자   | $1    |        |
+| 판매자  |       | $1     |
 
-Sum of all transaction entries is always zero. This mechanism provides end-to-end traceability of all money movements within the system.
+모든 거래 항목의 합은 항상 0이다. 이 메커니즘은 시스템 내 모든 자금 이동을 종단 간 추적할 수 있게 한다.
 
-### **Hosted payment page**
-To avoid storing credit card information and having to comply with various heavy regulations, most companies prefer utilizing a widget, provided by PSPs, which store and handle credit card payments for you:
+### **호스팅 결제 페이지**
+신용 카드 정보를 직접 저장하고 여러 까다로운 규정을 준수해야 하는 부담을 피하기 위해, 대부분의 회사는 PSP가 제공하며 신용 카드 결제 정보의 저장과 처리를 대신하는 위젯을 사용하기를 선호한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/hosted-payment-page.png" alt="hosted-payment-page" width="500" />
+    <img src="./images/hosted-payment-page.png" alt="호스팅 결제 페이지" width="500" />
 </div>
 
-### **Pay-out flow**
-The components of the pay-out flow are very similar to the pay-in flow.
+### **지급 흐름**
+지급 흐름의 구성 요소는 입금 흐름과 매우 유사하다.
 
-Main differences:
- * money is moved from e-commerce site's bank account to merchant's bank account
- * we can utilize a third-party account payable provider such as Tipalti
- * There's a lot of bookkeeping and regulatory requirements to handle with regards to pay-outs as well
+주요 차이점은 다음과 같다.
+ * 돈이 전자상거래 사이트의 은행 계좌에서 판매자의 은행 계좌로 이동한다.
+ * Tipalti 같은 타사 미지급금 관리 제공업체를 활용할 수 있다.
+ * 지급과 관련해서도 처리해야 할 회계 기록과 규제 요구사항이 많다.
 
 ---
 
-## Step 3: Design Deep Dive
-This section focuses on making the system faster, more robust and secure.
+## 3단계: 상세 설계
+이 절에서는 시스템을 더 빠르고 견고하며 안전하게 만드는 데 중점을 둔다.
 
-### **PSP Integration**
-If our system can directly connect to banks or card schemes, payment can be made without a PSP.
-These kinds of connections are very rare and uncommon, typically done at large companies which can justify the investment.
+### **PSP 통합**
+시스템이 은행이나 카드 네트워크에 직접 연결할 수 있다면 PSP 없이 결제할 수 있다.
+이러한 연결은 매우 드물며, 일반적으로 투자를 정당화할 수 있는 대기업에서만 이루어진다.
 
-If we go down the traditional route, a PSP can be integrated in one of two ways:
- * Through API, if our payment system can collect payment information
- * Through a hosted payment page to avoid dealing with payment information regulations
+전통적인 방식을 택한다면 다음 두 가지 방법 중 하나로 PSP를 통합할 수 있다.
+ * 결제 시스템이 결제 정보를 수집할 수 있다면 API를 통해 통합한다.
+ * 결제 정보 관련 규정을 직접 다루지 않도록 호스팅 결제 페이지를 통해 통합한다.
 
-Here's how the hosted payment page workflow works:
-
-<div style="margin-left:3rem">
-    <img src="./images/hosted-payment-page-workflow.png" alt="hosted-payment-page-workflow" width="500" />
-</div>
-
- * User clicks "checkout" button in the browser
- * Client calls the payment service with the payment order information
- * After receiving payment order information, the payment service sends a payment registration request to the PSP.
- * The PSP receives payment info such as currency, amount, expiration, etc, as well as a UUID for idempotency purposes. Typically the UUID of the payment order.
- * The PSP returns a token back which uniquely identifies the payment registration. The token is stored in the payment service database.
- * Once token is stored, the user is served with a PSP-hosted payment page. It is initialized using the token as well as a redirect URL for success/failure. 
- * User fills in payment details on the PSP page, PSP processes payment and returns the payment status
- * User is now redirected back to the redirectURL. Example redirect url - `https://your-company.com/?tokenID=JIOUIQ123NSF&payResult=X324FSa`
- * Asynchronously, the PSP calls our payment service via a webhook to inform our backend of the payment result
- * Payment service records the payment result based on the webhook received
-
-### **Reconciliation**
-The previous section explains the happy path of a payment. Unhappy paths are detected and reconciled using a background reconciliation process.
-
-Every night, the PSP sends a settlement file which our system uses to compare the external system's state against our internal system's state.
+호스팅 결제 페이지의 워크플로는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/settlement-report.png" alt="settlement-report" width="500" />
+    <img src="./images/hosted-payment-page-workflow.png" alt="호스팅 결제 페이지 워크플로" width="500" />
 </div>
 
-This process can also be used to detect internal inconsistencies between eg the ledger and the wallet services.
+ * 사용자가 브라우저에서 "결제" 버튼을 클릭한다.
+ * 클라이언트가 결제 주문 정보와 함께 결제 서비스를 호출한다.
+ * 결제 주문 정보를 받은 결제 서비스가 PSP에 결제 등록 요청을 보낸다.
+ * PSP는 통화, 금액, 만료 시간 등의 결제 정보와 멱등성을 위한 UUID를 받는다. 일반적으로 결제 주문의 UUID를 사용한다.
+ * PSP가 결제 등록을 고유하게 식별하는 토큰을 반환한다. 토큰은 결제 서비스 데이터베이스에 저장된다.
+ * 토큰을 저장한 뒤 사용자에게 PSP가 호스팅하는 결제 페이지를 제공한다. 이 페이지는 토큰 및 성공/실패 시 사용할 리디렉션 URL로 초기화된다.
+ * 사용자가 PSP 페이지에서 결제 세부 정보를 입력하면 PSP가 결제를 처리하고 결제 상태를 반환한다.
+ * 이제 사용자는 redirectURL로 다시 리디렉션된다. 리디렉션 URL의 예시는 `https://your-company.com/?tokenID=JIOUIQ123NSF&payResult=X324FSa`이다.
+ * PSP는 웹훅을 통해 결제 서비스를 비동기로 호출해 백엔드에 결제 결과를 알린다.
+ * 결제 서비스는 받은 웹훅을 바탕으로 결제 결과를 기록한다.
 
-Mismatches are handled manually by the finance team. Mismatches are handled as:
- * classifiable, hence, it is a known mismatch which can be adjusted using a standard procedure
- * classifiable, but can't be automated. Manually adjusted by the finance team
- * unclassifiable. Manually investigated and adjusted by the finance team
+### **대사**
+앞 절에서는 결제의 정상 경로를 설명했다. 비정상 경로는 백그라운드 대사 프로세스를 사용해 감지하고 조정한다.
 
-### **Handling payment processing delays**
-There are cases, where a payment can take hours to complete, although it typically takes seconds.
-
-This can happen due to:
- * a payment being flagged as high-risk and someone has to manually review it
- * credit card requires extra protection, eg 3D Secure Authentication, which requires extra details from card holder to complete
-
-These situations are handled by:
- * waiting for the PSP to send us a webhook when a payment is complete or polling its API if the PSP doesn't provide webhooks
- * showing a "pending" status to the user and giving them a page, where they can check-in for payment updates. We could also send them an email once their payment is complete
-
-### **Communication among internal services**
-There are two types of communication patterns services use to communicate with one another - synchronous and asynchronous.
-
-Synchronous communication (ie HTTP) works well for small-scale systems, but suffers as scale increases:
- * low performance - request-response cycle is long as more services get involved in the call chain
- * poor failure isolation - if PSPs or any other service fails, user will not receive a response
- * tight coupling - sender needs to know the receiver
- * hard to scale - not easy to support sudden increase in traffic due to not having a buffer
-
-Asynchronous communication can be divided into two categories.
-
-Single receiver - multiple receivers subscribe to the same topic and messages are processed only once:
+매일 밤 PSP는 정산 파일을 보내며, 시스템은 이 파일을 사용해 외부 시스템의 상태와 내부 시스템의 상태를 비교한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/single-receiver.png" alt="single-receiver" width="500" />
+    <img src="./images/settlement-report.png" alt="정산 보고서" width="500" />
 </div>
 
-Multiple receivers - multiple receivers subscribe to the same topic, but messages are forwarded to all of them:
+이 프로세스는 원장 서비스와 지갑 서비스 사이에서 발생하는 것과 같은 내부 불일치를 감지하는 데도 사용할 수 있다.
+
+불일치는 재무팀이 수동으로 처리한다. 처리 방식은 다음과 같다.
+ * 분류 가능하므로 표준 절차로 조정할 수 있는 알려진 불일치이다.
+ * 분류 가능하지만 자동화할 수 없다. 재무팀이 수동으로 조정한다.
+ * 분류할 수 없다. 재무팀이 수동으로 조사하고 조정한다.
+
+### **결제 처리 지연 다루기**
+결제는 일반적으로 몇 초면 완료되지만 몇 시간이 걸리는 경우도 있다.
+
+다음과 같은 이유로 발생할 수 있다.
+ * 결제가 고위험으로 표시되어 누군가가 수동으로 검토해야 한다.
+ * 신용 카드에 추가 보호 수단이 필요하다. 예를 들어 3D Secure Authentication은 완료하기 위해 카드 소유자의 추가 정보를 요구한다.
+
+이러한 상황은 다음과 같이 처리한다.
+ * 결제가 완료되었을 때 PSP가 웹훅을 보낼 때까지 기다리거나, PSP가 웹훅을 제공하지 않으면 API를 폴링한다.
+ * 사용자에게 "대기 중" 상태와 결제 갱신 상태를 확인할 수 있는 페이지를 보여 준다. 결제가 완료되면 이메일을 보낼 수도 있다.
+
+### **내부 서비스 간 통신**
+서비스가 서로 통신할 때 사용하는 패턴에는 동기 방식과 비동기 방식 두 가지가 있다.
+
+동기 통신(즉, HTTP)은 소규모 시스템에서는 잘 작동하지만 규모가 커질수록 문제가 생긴다.
+ * 낮은 성능 - 호출 체인에 더 많은 서비스가 관여할수록 요청-응답 주기가 길어진다.
+ * 장애 격리 미흡 - PSP나 다른 서비스에 장애가 발생하면 사용자가 응답을 받지 못한다.
+ * 강한 결합 - 송신자가 수신자를 알아야 한다.
+ * 확장의 어려움 - 버퍼가 없어 갑작스러운 트래픽 증가를 지원하기 쉽지 않다.
+
+비동기 통신은 두 가지 범주로 나눌 수 있다.
+
+단일 수신자 - 여러 수신자가 동일한 토픽을 구독하고 메시지는 한 번만 처리된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/multiple-receiver.png" alt="multiple-receiver" width="500" />
+    <img src="./images/single-receiver.png" alt="단일 수신자" width="500" />
 </div>
 
-Latter model works well for our payment system as a payment can trigger multiple side effects, handled by different services.
-
-In a nutshell, synchronous communication is simpler but doesn't allow services to be autonomous. 
-Async communication trades simplicity and consistency for scalability and resilience.
-
-### **Handling failed payments**
-Every payment system needs to address failed payments. Here are some of the mechanism we'll use to achieve that:
- * Tracking payment state - whenever a payment fails, we can determine whether to retry/refund based on the payment state.
- * Retry queue - payments which we'll retry are published to a retry queue
- * Dead-letter queue - payments which have terminally failed are pushed to a dead-letter queue, where the failed payment can be debugged and inspected.
+다중 수신자 - 여러 수신자가 동일한 토픽을 구독하고 메시지가 이들 모두에게 전달된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/failed-payments.png" alt="failed-payments" width="500" />
+    <img src="./images/multiple-receiver.png" alt="다중 수신자" width="500" />
 </div>
 
-### **Exactly-once delivery**
-We need to ensure a payment gets processed exactly-once to avoid double-charging a customer.
+결제 하나가 서로 다른 서비스에서 처리하는 여러 부수 효과를 일으킬 수 있으므로 후자의 모델이 결제 시스템에 적합하다.
 
-An operation is executed exactly-once if it is executed at-least-once and at-most-once at the same time.
+요약하면 동기 통신은 더 단순하지만 서비스가 자율적으로 동작하지 못한다.
+비동기 통신은 단순성과 일관성을 내주는 대신 확장성과 회복 탄력성을 얻는다.
 
-To achieve the at-least-once guarantee, we'll use a retry mechanism:
+### **실패한 결제 다루기**
+모든 결제 시스템은 결제 실패를 다뤄야 한다. 이를 위해 사용할 몇 가지 메커니즘은 다음과 같다.
+ * 결제 상태 추적 - 결제에 실패할 때마다 결제 상태를 기준으로 재시도할지 환불할지 결정할 수 있다.
+ * 재시도 큐 - 재시도할 결제를 재시도 큐에 발행한다.
+ * 데드 레터 큐 - 최종적으로 실패한 결제를 데드 레터 큐에 넣어 디버깅하고 조사할 수 있게 한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/retry-mechanism.png" alt="retry-mechanism" width="500" />
+    <img src="./images/failed-payments.png" alt="실패한 결제" width="500" />
 </div>
 
-Here are some common strategies on deciding the retry intervals:
- * immediate retry - client immediately sends another request after failure
- * fixed intervals - wait a fixed amount of time before retrying a payment
- * incremental intervals - incrementally increase retry interval between each retry
- * exponential back-off - double retry interval between subsequent retries
- * cancel - client cancels the request. This happens when the error is terminal or retry threshold is reached
+### **정확히 한 번 전달**
+고객에게 이중으로 청구하지 않으려면 결제가 정확히 한 번만 처리되도록 보장해야 한다.
 
-As a rule of thumb, default to an exponential back-off retry strategy. A good practice is for the server to specify a retry interval using a `Retry-After` header.
+연산이 최소 한 번 실행과 최대 한 번 실행을 동시에 보장하면 정확히 한 번 실행된 것이다.
 
-An issue with retries is that the server can potentially process a payment twice:
- * client clicks the "pay button" twice, hence, they are charged twice
- * payment is successfully processed by PSP, but not by downstream services (ledger, wallet). Retry causes the payment to be processed by the PSP again
-
-To address the double payment problem, we need to use an idempotency mechanism - a property that an operation applied multiple times is processed only once.
-
-From an API perspective, clients can make multiple calls which produce the same result. 
-Idempotency is managed by a special header in the request (eg `idempotency-key`), which is typically a UUID.
+최소 한 번 보장을 달성하기 위해 재시도 메커니즘을 사용한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/idempotency-example.png" alt="idempotency-example" width="500" />
+    <img src="./images/retry-mechanism.png" alt="재시도 메커니즘" width="500" />
 </div>
 
-Idempotency can be achieved using the database's mechanism of adding unique key constraints:
- * server attempts to insert a new row in the database
- * the insertion fails due to a unique key constraint violation
- * server detects that error and instead returns the existing object back to the client
+재시도 간격을 결정하는 일반적인 전략은 다음과 같다.
+ * 즉시 재시도 - 실패 직후 클라이언트가 즉시 다른 요청을 보낸다.
+ * 고정 간격 - 결제를 재시도하기 전에 고정된 시간 동안 기다린다.
+ * 증가 간격 - 재시도할 때마다 재시도 간격을 점진적으로 늘린다.
+ * 지수 백오프 - 연속된 재시도 사이의 간격을 두 배로 늘린다.
+ * 취소 - 클라이언트가 요청을 취소한다. 오류를 복구할 수 없거나 재시도 임계값에 도달하면 발생한다.
 
-Idempotency is also applied at the PSP side, using the nonce, which was previously discussed. PSPs will take care to not process payments with the same nonce twice.
+경험칙상 기본적으로 지수 백오프 재시도 전략을 사용한다. 서버가 `Retry-After` 헤더로 재시도 간격을 지정하는 것이 좋은 방법이다.
 
-### **Consistency**
-There are several stateful services called throughout a payment's lifecycle - PSP, ledger, wallet, payment service.
+재시도의 문제점은 서버가 결제를 두 번 처리할 가능성이 있다는 것이다.
+ * 클라이언트가 "결제 버튼"을 두 번 클릭해 두 번 청구된다.
+ * PSP에서는 결제를 성공적으로 처리했지만 하위 서비스(원장, 지갑)에서는 처리하지 못했다. 재시도로 인해 PSP가 결제를 다시 처리한다.
 
-Communication between any two services can fail. 
-We can ensure eventual data consistency between all services by implementing exactly-once processing and reconciliation.
+이중 결제 문제를 해결하려면 같은 연산을 여러 번 적용해도 한 번만 처리되는 성질인 멱등성 메커니즘을 사용해야 한다.
 
-If we use replication, we'll have to deal with replication lag, which can lead to users observing inconsistent data between primary and replica databases.
+API 관점에서 클라이언트는 동일한 결과를 내는 호출을 여러 번 할 수 있다.
+멱등성은 요청에 포함되는 특수 헤더(예: `idempotency-key`)로 관리하며, 일반적으로 UUID를 사용한다.
 
-To mitigate that, we can serve all reads and writes from the primary database and only utilize replicas for redundancy and fail-over.
-Alternatively, we can ensure replicas are always in-sync by utilizing a consensus algorithm such as Paxos or Raft.
-We could also use a consensus-based distributed database such as YugabyteDB or CockroachDB.
+<div style="margin-left:3rem">
+    <img src="./images/idempotency-example.png" alt="멱등성 예시" width="500" />
+</div>
 
-### **Payment security**
-Here are some mechanisms we can use to ensure payment security:
- * Request/response eavesdropping - we can use HTTPS to secure all communication
- * Data tampering - enforce encryption and integrity monitoring
- * Man-in-the-middle attacks - use SSL \w certificate pinning
- * Data loss - replicate data across multiple regions and take data snapshots
- * DDoS attack - implement rate limiting and firewall
- * Card theft - use tokens instead of storing real card information in our system
- * PCI compliance - a security standard for organizations which handle branded credit cards
- * Fraud - address verification, card verification value (CVV), user behavior analysis, etc
+데이터베이스에 고유 키 제약 조건을 추가해 멱등성을 달성할 수 있다.
+ * 서버가 데이터베이스에 새 행을 삽입하려 한다.
+ * 고유 키 제약 조건 위반으로 삽입에 실패한다.
+ * 서버가 해당 오류를 감지하고 기존 객체를 클라이언트에 반환한다.
+
+앞에서 논의한 논스(nonce)를 사용해 PSP 측에도 멱등성을 적용한다. PSP는 같은 논스를 가진 결제를 두 번 처리하지 않도록 한다.
+
+### **일관성**
+결제 수명 주기 동안 PSP, 원장, 지갑, 결제 서비스 같은 여러 상태 저장 서비스가 호출된다.
+
+두 서비스 사이의 통신은 언제든 실패할 수 있다.
+정확히 한 번 처리와 대사를 구현해 모든 서비스 간 데이터의 최종 일관성을 보장할 수 있다.
+
+복제를 사용하면 복제 지연을 처리해야 하며, 이 때문에 사용자가 주 데이터베이스와 복제본 데이터베이스 사이에서 일관되지 않은 데이터를 볼 수 있다.
+
+이를 완화하기 위해 모든 읽기와 쓰기를 주 데이터베이스에서 처리하고 복제본은 이중화와 장애 조치에만 사용할 수 있다.
+대안으로 Paxos나 Raft 같은 합의 알고리즘을 사용해 복제본이 항상 동기화되도록 보장할 수 있다.
+YugabyteDB나 CockroachDB처럼 합의 기반 분산 데이터베이스를 사용할 수도 있다.
+
+### **결제 보안**
+결제 보안을 보장하기 위해 사용할 수 있는 몇 가지 메커니즘은 다음과 같다.
+ * 요청/응답 도청 - HTTPS를 사용해 모든 통신을 보호할 수 있다.
+ * 데이터 변조 - 암호화와 무결성 모니터링을 강제한다.
+ * 중간자 공격 - 인증서 고정을 적용한 SSL을 사용한다.
+ * 데이터 손실 - 여러 리전에 데이터를 복제하고 데이터 스냅샷을 생성한다.
+ * DDoS 공격 - 요청률 제한과 방화벽을 구현한다.
+ * 카드 도난 - 시스템에 실제 카드 정보를 저장하는 대신 토큰을 사용한다.
+ * PCI 준수 - 브랜드 신용 카드를 취급하는 조직을 위한 보안 표준이다.
+ * 사기 - 주소 확인, 카드 검증 값(CVV), 사용자 행동 분석 등을 사용한다.
 
 ---
 
-## Step 4: Wrap Up
-Other talking points:
- * Monitoring and alerting
- * Debugging tools - we need tools which make it easy to understand why a payment has failed
- * Currency exchange - important when designing a payment system for international use
- * Geography - different regions might have different payment methods
- * Cash payment - very common in places like India and Brazil
- * Google/Apple Pay integration
+## 4단계: 마무리
+그 밖에 논의할 사항은 다음과 같다.
+ * 모니터링과 경고
+ * 디버깅 도구 - 결제 실패 원인을 쉽게 파악할 수 있는 도구가 필요하다.
+ * 환전 - 국제 결제 시스템을 설계할 때 중요하다.
+ * 지역 - 지역마다 결제 수단이 다를 수 있다.
+ * 현금 결제 - 인도와 브라질 같은 지역에서 매우 흔하다.
+ * Google/Apple Pay 통합

@@ -1,98 +1,97 @@
-# Chapter 2: Back-of-the-Envelope Estimation
+# 2장: 개략적 규모 추정
 
-## Introduction
-Back-of-the-envelope estimation is a crucial skill in system design interviews. It involves making quick, rough calculations to assess system capacity or performance. According to Jeff Dean, Google Senior Fellow, these estimates help evaluate whether designs meet requirements through thought experiments and common performance benchmarks.
+## 소개
+개략적 규모 추정은 시스템 설계 면접에서 매우 중요한 기술이다. 시스템 용량이나 성능을 평가하기 위해 빠르고 대략적으로 계산하는 과정이다. Google 시니어 펠로 Jeff Dean에 따르면, 이러한 추정은 사고 실험과 일반적인 성능 기준을 통해 설계가 요구사항을 충족하는지 평가하는 데 도움이 된다.
 
-This chapter covers key concepts, methodologies, and examples to build proficiency in scalability and estimation.
-
----
-
-## Section 1: Key Concepts
-
-### Power of Two
-Understanding data volume in terms of powers of two is fundamental:
-
-<img src="./images/power-of-two.png" alt="power-of-two" width="500" />
-
-This knowledge helps in performing accurate storage and bandwidth calculations.
+이 장에서는 확장성과 추정 능력을 기르기 위한 핵심 개념, 방법론 및 예시를 다룬다.
 
 ---
 
-### Latency Numbers Every Programmer Should Know
-Latency numbers represent the time taken for various operations in computing systems. These provide insights into relative performance:
+## 1절: 핵심 개념
 
-| Operation                | Latency (2020) |
-|--------------------------|----------------|
-| L1 Cache Access          | 0.5 ns         |
-| L2 Cache Access          | 7 ns           |
-| Main Memory Access       | 100 ns         |
-| SSD Random Read          | 150 µs         |
-| HDD Random Seek          | 10 ms          |
-| Round-Trip in Data Center| 500 µs         |
-| Inter-Region Data Center | 150 ms         |
+### 2의 거듭제곱
+데이터 양을 2의 거듭제곱 단위로 이해하는 것은 기본이다.
 
-**Key Insights:**
-- Memory is fast, disk is slow.
-- Avoid disk seeks whenever possible.
-- Compress data before transmitting over the internet to save bandwidth.
+<img src="./images/power-of-two.png" alt="2의 거듭제곱" width="500" />
+
+이 지식은 저장 공간과 대역폭을 정확하게 계산하는 데 도움이 된다.
+
+---
+
+### 모든 프로그래머가 알아야 할 지연 시간 수치
+지연 시간 수치는 컴퓨팅 시스템에서 여러 작업을 수행하는 데 걸리는 시간을 나타낸다. 이를 통해 상대적인 성능을 파악할 수 있다.
+
+| 작업                     | 지연 시간(2020년) |
+|--------------------------|-------------------|
+| L1 캐시 접근             | 0.5 ns            |
+| L2 캐시 접근             | 7 ns              |
+| 주 메모리 접근           | 100 ns            |
+| SSD 임의 읽기            | 150 µs            |
+| HDD 임의 탐색            | 10 ms             |
+| 데이터 센터 내 왕복      | 500 µs            |
+| 리전 간 데이터 센터      | 150 ms            |
+
+**핵심 사항:**
+- 메모리는 빠르고 디스크는 느리다.
+- 가능한 한 디스크 탐색을 피한다.
+- 대역폭을 절약하려면 인터넷으로 전송하기 전에 데이터를 압축한다.
 
 
 ---
 
-### Availability Numbers
-High availability (HA) ensures minimal downtime. Availability is expressed in **nines**:
-- **99% (Two Nines):** ~3.65 days/year of downtime
-- **99.9% (Three Nines):** ~8.8 hours/year of downtime
-- **99.99% (Four Nines):** ~52 minutes/year of downtime
-- **99.999% (Five Nines):** ~5.3 minutes/year of downtime
-- **99.9999% (Six Nines):** ~31.56 seconds/year of downtime
+### 가용성 수치
+고가용성(HA)은 중단 시간을 최소화한다. 가용성은 **나인(nines)의 개수**로 표현한다.
+- **99%(나인 2개):** 연간 중단 시간 약 3.65일
+- **99.9%(나인 3개):** 연간 중단 시간 약 8.8시간
+- **99.99%(나인 4개):** 연간 중단 시간 약 52분
+- **99.999%(나인 5개):** 연간 중단 시간 약 5.3분
+- **99.9999%(나인 6개):** 연간 중단 시간 약 31.56초
 
 
-Cloud providers like Amazon, Google, and Microsoft aim for SLAs (Service Level Agreements) of **99.9% or higher**.
+Amazon, Google, Microsoft와 같은 클라우드 제공업체는 **99.9% 이상**의 SLA(서비스 수준 협약)를 목표로 한다.
 
 ---
 
-## Section 2: Example Estimation - Twitter QPS and Storage Requirements
+## 2절: 추정 예시 - Twitter QPS 및 저장 공간 요구사항
 
-### Assumptions
-- **300 million monthly active users (MAU).**
-- **50% daily active users (DAU).**
-- **Average tweets/user/day:** 2.
-- **10% of tweets contain media.**
-- **Data retention:** 5 years.
+### 가정
+- **월간 활성 사용자(MAU) 3억 명.**
+- **일간 활성 사용자(DAU) 50%.**
+- **사용자당 일평균 트윗 수:** 2개.
+- **미디어를 포함하는 트윗 비율:** 10%.
+- **데이터 보존 기간:** 5년.
 
-### Estimations
-1. **Query Per Second (QPS):**
+### 추정
+1. **초당 쿼리 수(QPS):**
    - DAU = \( 300M x 50\% = 150M \)
-   - Tweets QPS = \( 150M x 2 tweets / 24 hour / 3600 seconds = ~3500 )
-   - Peak QPS = \( 2 x 3500 = ~7000 \)
+   - 트윗 QPS = \( 150M x 2 tweets / 24 hour / 3600 seconds = ~3500 )
+   - 피크 QPS = \( 2 x 3500 = ~7000 \)
 
-2. **Media Storage:**
-   - **Tweet Size Components:**
-     - `tweet_id`: 64 bytes
-     - `text`: 140 bytes
+2. **미디어 저장 공간:**
+   - **트윗 크기 구성 요소:**
+     - `tweet_id`: 64바이트
+     - `text`: 140바이트
      - `media`: 1 MB
-   - **Daily Media Storage:** \( 150M x 2 x 10\% x 1MB = 30TB per day \)
-   - **5-Year Storage:** \( 30TB x 365 x 5 = ~55PB \)
+   - **일일 미디어 저장 공간:** \( 150M x 2 x 10\% x 1MB = 30TB per day \)
+   - **5년 저장 공간:** \( 30TB x 365 x 5 = ~55PB \)
 
 ---
 
-## Section 3: Tips for Effective Estimation
+## 3절: 효과적인 추정을 위한 팁
 
-### 1. Rounding and Approximation
-Precision is not critical; focus on the process. Simplify complex calculations using round numbers. For example:
-- \( 99987 / 9.1 \) can be approximated as \( 100,000 / 10 = 10,000 \).
+### 1. 반올림과 근사
+정밀도는 중요하지 않으며 과정에 집중한다. 반올림한 수를 사용해 복잡한 계산을 단순화한다. 예를 들면 다음과 같다.
+- \( 99987 / 9.1 \)은 \( 100,000 / 10 = 10,000 \)으로 근사할 수 있다.
 
-### 2. Write Down Assumptions
-Document assumptions clearly for future reference.
+### 2. 가정 기록
+나중에 참고할 수 있도록 가정을 명확히 기록한다.
 
-### 3. Label Units
-Avoid ambiguity by labeling units (e.g., `5 MB` instead of `5`).
+### 3. 단위 표시
+단위를 표시하여 모호함을 피한다(예: `5 MB`라고 표시하고 `5`라고만 쓰지 않는다).
 
-### 4. Common Estimation Scenarios
-- **QPS (Queries Per Second):** Measure traffic intensity.
-- **Peak QPS:** Account for traffic spikes.
-- **Storage Requirements:** Estimate total data needs.
-- **Cache Requirements:** Evaluate memory requirements for caching.
-- **Number of Servers:** Calculate hardware needs based on workload.
-
+### 4. 일반적인 추정 시나리오
+- **QPS(초당 쿼리 수):** 트래픽 규모를 측정한다.
+- **피크 QPS:** 트래픽 급증을 고려한다.
+- **저장 공간 요구사항:** 전체 데이터 요구량을 추정한다.
+- **캐시 요구사항:** 캐싱에 필요한 메모리를 평가한다.
+- **서버 수:** 워크로드를 바탕으로 하드웨어 요구량을 계산한다.

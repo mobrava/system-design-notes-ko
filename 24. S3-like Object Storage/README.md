@@ -1,138 +1,138 @@
-# Chapter 24: S3-like Object Storage
+# 24장: S3 유사 객체 저장소
 
-## Introduction
+## 소개
 
-In this chapter, we'll be designing an **object storage** service, similar to **Amazon S3**.
+이 장에서는 **Amazon S3**와 유사한 **객체 저장소** 서비스를 설계한다.
 
-Storage systems fall into three broad categories:
-- **Block storage**
-- **File storage**
-- **Object storage**
+저장 시스템은 크게 세 가지 범주로 나뉜다.
+- **블록 저장소**
+- **파일 저장소**
+- **객체 저장소**
 
-**Block storage** are devices, which came out in 1960s. HDDs and SSDs are such examples.
-These devices are typically physically attached to a server, although they can also be network-attached via high-speed network protocols.
-Servers can format the raw blocks and use them as a file system or it can hand control of them to servers directly.
+**블록 저장소**는 1960년대에 등장한 장치다. HDD와 SSD가 그 예다.
+이러한 장치는 일반적으로 서버에 물리적으로 연결하지만, 고속 네트워크 프로토콜을 통해 네트워크로 연결할 수도 있다.
+서버는 원시 블록을 포맷해 파일 시스템으로 사용하거나 그 제어권을 서버에 직접 넘길 수 있다.
 
-**File storage** is built on top of block storage. It provides a higher level of abstraction, making it easier to manage folders and files.
+**파일 저장소**는 블록 저장소 위에 구축된다. 더 높은 수준의 추상화를 제공하므로 폴더와 파일을 더 쉽게 관리할 수 있다.
 
-**Object storage** sacrifices performance for high durability, vast scale and low cost.
-It targets "cold" data and is mainly used for archival and backup.
-There is no hierarchical directory structure, all data is stored as objects in a flat structure.
-It is relatively slow compared to other storage types. Most cloud providers have an object storage offering - Amazon S3, Google GCS, etc.
+**객체 저장소**는 높은 내구성, 방대한 규모, 저렴한 비용을 위해 성능을 희생한다.
+"콜드" 데이터를 대상으로 하며 주로 보관과 백업에 사용한다.
+계층적 디렉터리 구조가 없고 모든 데이터를 평면 구조의 객체로 저장한다.
+다른 저장소 유형에 비해 상대적으로 느리다. Amazon S3, Google GCS 등 대부분의 클라우드 제공자가 객체 저장소 제품을 제공한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/storage-comparison.png" alt="storage-comparison" width="500" />
+    <img src="./images/storage-comparison.png" alt="저장소 비교" width="500" />
 </div>
 
-|                 | Block Storage                    | File Storage                            | Object Storage                 |
+|                 | 블록 저장소                    | 파일 저장소                            | 객체 저장소                 |
 |-----------------|----------------------------------|-----------------------------------------|--------------------------------|
-| Mutable Content | Y                                | Y                                       | N (has object versioning）     |
-| Cost            | High                             | Medium to high                          | Low                            |
-| Performance     | Medium to high, very high        | Medium to high                          | Low to medium                  |
-| Consistency     | Strong consistency               | Strong consistency                      | Strong consistency [5]         |
-| Data access     | SAS/iSCSI/FC                     | Standard file access, CIFS/SMB, and NFS | RESTful API                    |
-| Scalability     | Medium scalability               | High scalability                        | Vast scalability               |
-| Good for        | Virtual machines (VM), databases | General-purpose file system access      | Binary data, unstructured data |
+| 콘텐츠 변경 가능 여부 | 예                                | 예                                       | 아니요(객체 버전 관리 지원)     |
+| 비용            | 높음                             | 중간~높음                          | 낮음                            |
+| 성능     | 중간~높음, 매우 높음        | 중간~높음                          | 낮음~중간                  |
+| 일관성     | 강한 일관성               | 강한 일관성                      | 강한 일관성 [5]         |
+| 데이터 접근     | SAS/iSCSI/FC                     | 표준 파일 접근, CIFS/SMB, NFS | RESTful API                    |
+| 확장성     | 중간 수준의 확장성               | 높은 확장성                        | 매우 높은 확장성               |
+| 적합한 용도        | 가상 머신(VM), 데이터베이스 | 범용 파일 시스템 접근      | 바이너리 데이터, 비정형 데이터 |
 
-Some terminology, related to object storage:
-- **Bucket** - logical container for objects. Name is globally unique.
-- **Object** - An individual piece of data, stored in a bucket. Contains object data and metadata.
-- **Versioning** - A feature keeping multiple variants of an object in the same bucket.
-- **Uniform Resource Identifier (URI)** - each resource is uniquely identified by a URI.
-- **Service-level Agreement (SLA)** - contract between service provider and client.
+객체 저장소와 관련된 몇 가지 용어는 다음과 같다.
+- **버킷(Bucket)** - 객체의 논리적 컨테이너다. 이름은 전역적으로 고유하다.
+- **객체(Object)** - 버킷에 저장하는 개별 데이터 조각이다. 객체 데이터와 메타데이터를 포함한다.
+- **버전 관리(Versioning)** - 같은 버킷에 객체의 여러 변형을 보관하는 기능이다.
+- **통합 자원 식별자(Uniform Resource Identifier, URI)** - 각 리소스는 URI로 고유하게 식별한다.
+- **서비스 수준 협약(Service-level Agreement, SLA)** - 서비스 제공자와 고객 간의 계약이다.
 
-Amazon S3 Standard-Infrequent Access storage class SLAs:
-- Durability of 99.999999999% across multiple Availability Zones
-- Data is resilient in the event of entire Availability Zone being destroyed
-- Designed for 99.9% availability
-
----
-
-## Step 1: Understand the Problem and Establish Design Scope
-
-- C: Which features should be included?
-- I: Bucket creation, Object upload/download, versioning, Listing objects in a bucket
-- C: What is the typical data size?
-- I: We need to store both massive objects and small objects efficiently
-- C: How much data do we store in a year?
-- I: 100 petabytes
-- C: Can we assume 6 nines of data durbility (99.9999%) and service availability of 4 nines (99.99%)?
-- I: Yes, sounds reasonable
-
-### **Non-functional requirements**
-
-- **100 PB of data**
-- **6 nines of data durability**
-- **4 nines of service availability**
-- Storage efficiency. Reduce storage cost while maintaining high reliability and performance
-
-### **Back-of-the-envelope estimation**
-
-Object storage is likely to have bottlenecks in disk capacity or IO per second (IOPS).
-
-Assumptions:
-- we have 20% small (less than 1mb), 60% mid-size (1-64mb) and 20% large objects (greater than 64mb),
-- One hard disk (SATA, 7200rpm) is capable of doing 100-150 random seeks per second (100-150 IOPS)
-
-Given the assumptions, we can estimate the total number of objects the system can persist.
-- Let's use median size per object type to simplify calculation - 0.5mb for small, 32mb for medium, 200mb for large.
-- Given 100PB of storage (10^11 MB) and 40% of storage usage results in 0.68bil objects
-- If we assume metadata is 1kb, then we need 0.68tb space to store metadata info
+Amazon S3 Standard-Infrequent Access 저장소 클래스의 SLA는 다음과 같다.
+- 여러 가용 영역(Availability Zone)에 걸쳐 99.999999999%의 내구성
+- 가용 영역 전체가 파괴되어도 데이터가 손실되지 않음
+- 99.9%의 가용성을 목표로 설계
 
 ---
 
-## Step 2: Propose High-Level Design and Get Buy-In
+## 1단계: 문제 이해 및 설계 범위 확정
 
-Let's explore some interesting properties of object storage before diving into the design:
-- **Object immutability** - objects in object storage are immutable (not the case in other storage systems). We may delete them or replace them, but no update.
-- **Key-value store** - an object URI is its key and we can get its contents by making an HTTP call
-- **Write once, read many times** - data access pattern is writing once and reading many times. According to some Linkedin research, 95% of operations are reads
-- Support both small and large objects
+- 지원자: 어떤 기능을 포함해야 하는가?
+- 면접관: 버킷 생성, 객체 업로드/다운로드, 버전 관리, 버킷 내 객체 목록 조회다.
+- 지원자: 일반적인 데이터 크기는 얼마인가?
+- 면접관: 매우 큰 객체와 작은 객체를 모두 효율적으로 저장해야 한다.
+- 지원자: 1년에 얼마나 많은 데이터를 저장하는가?
+- 면접관: 100페타바이트다.
+- 지원자: 식스 나인(99.9999%)의 데이터 내구성과 포 나인(99.99%)의 서비스 가용성을 가정해도 되는가?
+- 면접관: 그렇다. 합리적이다.
 
-Design philosophy of object storage is similar to UNIX - when we save a file, it creates the filename in a data structure, called inode and file data is stored in different disk locations.
-The inode contains a list of file block pointers, which point to different locations on disk.
+### **비기능 요구사항**
 
-When accessing a file, we first fetch its metadata from the inode, prior to fetching the file contents.
+- **100PB의 데이터**
+- **99.9999%의 데이터 내구성**
+- **99.99%의 서비스 가용성**
+- 저장 효율성. 높은 신뢰성과 성능을 유지하면서 저장 비용을 줄인다.
 
-Object storage works similarly - metadata store is used for file information, but contents are stored on disk:
+### **개략적인 규모 추정**
+
+객체 저장소에서는 디스크 용량이나 초당 I/O 작업 수(IOPS)가 병목이 되기 쉽다.
+
+가정은 다음과 같다.
+- 작은 객체(1MB 미만) 20%, 중간 크기 객체(1~64MB) 60%, 큰 객체(64MB 초과) 20%다.
+- 하드 디스크 하나(SATA, 7200rpm)는 초당 100~150회의 임의 탐색(100~150 IOPS)을 수행할 수 있다.
+
+이 가정을 바탕으로 시스템이 저장할 수 있는 전체 객체 수를 추정할 수 있다.
+- 계산을 단순화하기 위해 객체 유형별 중앙값을 사용한다. 작은 객체는 0.5MB, 중간 객체는 32MB, 큰 객체는 200MB다.
+- 100PB의 저장 공간(10^11 MB)과 40%의 저장 공간 사용량을 가정하면 객체 수는 6.8억 개다.
+- 메타데이터가 1KB라고 가정하면 메타데이터 정보를 저장하는 데 0.68TB의 공간이 필요하다.
+
+---
+
+## 2단계: 개략적 설계안 제시 및 동의 구하기
+
+설계를 자세히 살펴보기 전에 객체 저장소의 몇 가지 흥미로운 특성을 알아본다.
+- **객체 불변성** - 객체 저장소의 객체는 다른 저장 시스템과 달리 변경할 수 없다. 삭제하거나 교체할 수는 있지만 업데이트할 수는 없다.
+- **키-값 저장소** - 객체 URI가 키이며 HTTP 호출로 그 내용을 가져올 수 있다.
+- **한 번 쓰고 여러 번 읽기** - 데이터 접근 패턴은 한 번 쓰고 여러 번 읽는 형태다. 일부 LinkedIn 연구에 따르면 작업의 95%가 읽기다.
+- 작은 객체와 큰 객체를 모두 지원한다.
+
+객체 저장소의 설계 철학은 UNIX와 비슷하다. 파일을 저장하면 inode라는 데이터 구조에 파일 이름을 만들고 파일 데이터는 디스크의 서로 다른 위치에 저장한다.
+inode에는 디스크의 여러 위치를 가리키는 파일 블록 포인터 목록이 들어 있다.
+
+파일에 접근할 때는 파일 내용을 가져오기 전에 inode에서 메타데이터를 먼저 가져온다.
+
+객체 저장소도 비슷하게 작동한다. 파일 정보에는 메타데이터 저장소를 사용하지만 내용은 디스크에 저장한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/object-store-vs-unix.png" alt="object-store-vs-unix" width="500" />
+    <img src="./images/object-store-vs-unix.png" alt="객체 저장소와 UNIX 비교" width="500" />
 </div>
 
-By separating metadata from file contents, we can scale the different stores independently:
+메타데이터와 파일 내용을 분리하면 각 저장소를 독립적으로 확장할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/bucket-and-object.png" alt="bucket-and-object" width="500" />
+    <img src="./images/bucket-and-object.png" alt="버킷과 객체" width="500" />
 </div>
 
-### **High-level design**
+### **개략적 설계**
 
 <div style="margin-left:3rem">
-    <img src="./images/high-level-design.png" alt="high-level-design" width="500" />
+    <img src="./images/high-level-design.png" alt="개략적 설계" width="500" />
 </div>
 
-- **Load balancer** - distributes API requests across service replicas
-- **API service** - Stateless server, orchestrating calls to metadata and object store, as well as IAM service.
-- **Identity and access management (IAM)** - central place for auth, authz, access control.
-- **Data store** - stores and retrieves actual data. Operations are based on object ID (UUID).
-- **Metadata store** - stores object metadata
+- **로드 밸런서** - API 요청을 서비스 복제본에 분산한다.
+- **API 서비스** - 메타데이터 저장소, 객체 저장소, IAM 서비스에 대한 호출을 조율하는 무상태 서버다.
+- **신원 및 접근 관리(Identity and Access Management, IAM)** - 인증, 인가, 접근 제어를 중앙에서 관리한다.
+- **데이터 저장소** - 실제 데이터를 저장하고 가져온다. 작업은 객체 ID(UUID)를 기준으로 한다.
+- **메타데이터 저장소** - 객체 메타데이터를 저장한다.
 
-### **Uploading an object**
+### **객체 업로드**
 
 <div style="margin-left:3rem">
-    <img src="./images/uploading-object.png" alt="uploading-object" width="500" />
+    <img src="./images/uploading-object.png" alt="객체 업로드" width="500" />
 </div>
 
-- Create a bucket named "bucket-to-share" via HTTP PUT request
-- API service calls IAM to ensure user is authorized and has write permissions
-- API service calls metadata store to create a bucket entry. Once created, success response is returned.
-- After bucket is created, HTTP PUT is sent to create an object named "script.txt"
-- API service verifies user identity and ensures user has write permissions
-- Once validation passes, object payload is sent via HTTP PUT to the data store. Data store persists it and returns a UUID.
-- API service calls metadata store to create a new entry with object_id, bucket_id and bucket_name, among other metadata.
+- HTTP PUT 요청으로 "bucket-to-share"라는 버킷을 생성한다.
+- API 서비스는 사용자가 인가되었고 쓰기 권한이 있는지 확인하기 위해 IAM을 호출한다.
+- API 서비스는 버킷 항목을 생성하기 위해 메타데이터 저장소를 호출한다. 생성이 완료되면 성공 응답을 반환한다.
+- 버킷을 생성한 후 "script.txt"라는 객체를 생성하기 위해 HTTP PUT을 보낸다.
+- API 서비스는 사용자 신원을 검증하고 쓰기 권한이 있는지 확인한다.
+- 검증을 통과하면 HTTP PUT으로 객체 페이로드를 데이터 저장소에 보낸다. 데이터 저장소는 이를 영속화하고 UUID를 반환한다.
+- API 서비스는 그 밖의 메타데이터와 함께 object_id, bucket_id, bucket_name을 포함하는 새 항목을 만들도록 메타데이터 저장소를 호출한다.
 
-Example object upload request:
+객체 업로드 요청 예시는 다음과 같다.
 
 ```
 PUT /bucket-to-share/script.txt HTTP/1.1
@@ -146,11 +146,11 @@ x-amz-meta-author: Alex
 [4567 bytes of object data]
 ```
 
-### **Downloading an object**
+### **객체 다운로드**
 
-Buckets have no directory hierarchy, buy we can create a logical hierarchy by concatenating bucket name and object name to simulate a folder structure.
+버킷에는 디렉터리 계층이 없지만, 버킷 이름과 객체 이름을 연결해 폴더 구조를 흉내 낸 논리적 계층을 만들 수 있다.
 
-Example GET request for fetching an object:
+객체를 가져오는 GET 요청 예시는 다음과 같다.
 
 ```
 GET /bucket-to-share/script.txt HTTP/1.1
@@ -160,288 +160,287 @@ Authorization: authorization string
 ```
 
 <div style="margin-left:3rem">
-    <img src="./images/download-object.png" alt="download-object" width="500" />
+    <img src="./images/download-object.png" alt="객체 다운로드" width="500" />
 </div>
 
-- Client sends an HTTP GET request to the load balancer, ie `GET /bucket-to-share/script.txt`
-- API service queries IAM to verify the user has correct permissions to read the bucket
-- Once validated, UUID of object is retrieved from metadata store
-- Object payload is retrieved from data store based on UUID and returned to the client
+- 클라이언트는 로드 밸런서에 HTTP GET 요청, 즉 `GET /bucket-to-share/script.txt`를 보낸다.
+- API 서비스는 사용자가 버킷을 읽을 올바른 권한이 있는지 검증하기 위해 IAM에 질의한다.
+- 검증이 끝나면 메타데이터 저장소에서 객체의 UUID를 가져온다.
+- UUID를 기준으로 데이터 저장소에서 객체 페이로드를 가져와 클라이언트에 반환한다.
 
 ---
 
 // sprint 1
 
-## Step 3: Design Deep Dive
+## 3단계: 상세 설계
 
-### **Data store**
+### **데이터 저장소**
 
-Here's how the API service interacts with the data store:
-
-<div style="margin-left:3rem">
-    <img src="./images/data-store-interactions.png" alt="data-store-interactions" width="500" />
-</div>
-
-The data store's main components:
+API 서비스가 데이터 저장소와 상호작용하는 방식은 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/data-store-main-components.png" alt="data-store-main-components" width="500" />
+    <img src="./images/data-store-interactions.png" alt="데이터 저장소 상호작용" width="500" />
 </div>
 
-The data routing service provides a RESTful or gRPC API to access the data node cluster.
-It is a stateless service, which scales by adding more servers.
-
-It's main responsibilities are:
-- querying the placement service to get the best data node to store data
-- reading data from data nodes and returning it to the API service
-- Writing data to data nodes
-
-The placement service determines which data nodes should store an object.
-It maintains a virtual cluster map, which determines the physical topology of a cluster.
+데이터 저장소의 주요 구성 요소는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/virtual-cluster-map.png" alt="virtual-cluster-map" width="500" />
+    <img src="./images/data-store-main-components.png" alt="데이터 저장소의 주요 구성 요소" width="500" />
 </div>
 
-The service also sends heartbeats to all data nodes to determine if they should be removed from the virtual cluster.
+데이터 라우팅 서비스는 데이터 노드 클러스터에 접근하는 RESTful 또는 gRPC API를 제공한다.
+서버를 추가해 확장할 수 있는 무상태 서비스다.
 
-Since this is a critical service, it is recommended to maintain a cluster of 5 or 7 replicas, synchronized via Paxos or Raft consensus algorithms.
-Eg a 7 node cluster can tolerate 3 nodes failing.
+주요 책임은 다음과 같다.
+- 데이터를 저장할 최적의 데이터 노드를 얻기 위해 배치(placement) 서비스에 질의한다.
+- 데이터 노드에서 데이터를 읽어 API 서비스에 반환한다.
+- 데이터 노드에 데이터를 쓴다.
 
-Data nodes store the actual object data.
-Reliability and durability is ensured by replicating data to multiple data nodes.
-
-Each data node has a daemon running, which sends heartbeats to the placement service.
-
-The heartbeat includes:
-- How many disk drives (HDD or SSD) does the data node manage?
-- How much data is stored on each drive?
-
-#### Data persistence flow
+배치 서비스는 객체를 저장할 데이터 노드를 결정한다.
+클러스터의 물리적 토폴로지를 결정하는 가상 클러스터 맵을 유지한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/data-persistence-flow.png" alt="data-persistence-flow" width="500" />
+    <img src="./images/virtual-cluster-map.png" alt="가상 클러스터 맵" width="500" />
 </div>
 
-- API service forwards the object data to data store
-- Data routing service sends the data to the primary data node
-- Primary data node saves the data locally and replicates it to two secondary data nodes. Response is sent after successful replication.
-- The UUID of the object is returned to the API service.
+또한 모든 데이터 노드에 하트비트를 보내 가상 클러스터에서 제거해야 하는지 판단한다.
 
-Caveats:
-- Given an object UUID, it's replication group is deterministically chosen by using consistent hashing
-- In step 4, the primary data node replicates the object data before returning a response. This favors strong consistency over higher latency.
+이는 핵심 서비스이므로 Paxos 또는 Raft 합의 알고리즘으로 동기화하는 복제본 5개 또는 7개로 구성된 클러스터를 유지하는 것이 좋다.
+예를 들어 노드 7개로 이루어진 클러스터는 노드 3개에 장애가 발생해도 견딜 수 있다.
+
+데이터 노드는 실제 객체 데이터를 저장한다.
+여러 데이터 노드에 데이터를 복제해 신뢰성과 내구성을 보장한다.
+
+각 데이터 노드에서는 배치 서비스에 하트비트를 보내는 데몬이 실행된다.
+
+하트비트에는 다음 정보가 포함된다.
+- 데이터 노드가 관리하는 디스크 드라이브(HDD 또는 SSD)는 몇 개인가?
+- 각 드라이브에는 데이터가 얼마나 저장되어 있는가?
+
+#### 데이터 영속화 흐름
 
 <div style="margin-left:3rem">
-    <img src="./images/consistency-vs-latency.png" alt="consistency-vs-latency" width="500" />
+    <img src="./images/data-persistence-flow.png" alt="데이터 영속화 흐름" width="500" />
 </div>
 
-#### How data is organized
+- API 서비스가 객체 데이터를 데이터 저장소로 전달한다.
+- 데이터 라우팅 서비스가 데이터를 주 데이터 노드로 보낸다.
+- 주 데이터 노드는 데이터를 로컬에 저장하고 두 개의 보조 데이터 노드에 복제한다. 복제가 성공하면 응답을 보낸다.
+- 객체의 UUID를 API 서비스에 반환한다.
 
-One simple approach to managing data is to store each object in a separate file.
-
-This works, but is not performant with many small files in a file system:
-- Data blocks on HDD are wasted, because every file uses the whole block size. Typical block size is 4kb.
-- Many files means many inodes. Operating systems don't deal well with too many inodes and there is also a max inode limit.
-
-These issues can be addressed by merging many small files into bigger ones via a write-ahead log (WAL). Once the file reaches its capacity (typically a few GB), a new file is created:
+주의할 점은 다음과 같다.
+- 객체 UUID가 주어지면 일관된 해싱을 사용해 복제 그룹을 결정론적으로 선택한다.
+- 위 흐름의 4번째 단계에서 주 데이터 노드는 응답을 반환하기 전에 객체 데이터를 복제한다. 이 방식은 더 짧은 지연 시간보다 강한 일관성을 우선한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/wal-optimization.png" alt="wal-optimization" width="500" />
+    <img src="./images/consistency-vs-latency.png" alt="일관성과 지연 시간 비교" width="500" />
 </div>
 
-The downside of this approach is that write access to the file needs to be serialized. Multiple cores accessing the same file must wait for each other.
-To fix this, we can confine files to specific cores to avoid lock contention.
+#### 데이터 구성 방식
 
-#### Object lookup
+데이터를 관리하는 간단한 방법은 각 객체를 별도 파일에 저장하는 것이다.
 
-To support storing multiple objects in the same file, we need to maintain a table, which tells the data node:
+이 방식은 작동하지만 파일 시스템에 작은 파일이 많으면 성능이 좋지 않다.
+- 모든 파일이 전체 블록 크기를 사용하므로 HDD의 데이터 블록이 낭비된다. 일반적인 블록 크기는 4KB다.
+- 파일이 많으면 inode도 많아진다. 운영체제는 지나치게 많은 inode를 잘 처리하지 못하며 inode의 최대 개수에도 제한이 있다.
+
+여러 작은 파일을 미리 쓰기 로그(Write-Ahead Log, WAL)를 이용해 더 큰 파일로 병합하면 이러한 문제를 해결할 수 있다. 파일이 용량 한도, 일반적으로 수 GB에 도달하면 새 파일을 생성한다.
+
+<div style="margin-left:3rem">
+    <img src="./images/wal-optimization.png" alt="WAL 최적화" width="500" />
+</div>
+
+이 접근 방식의 단점은 파일 쓰기 접근을 직렬화해야 한다는 것이다. 여러 코어가 같은 파일에 접근하면 서로 기다려야 한다.
+이를 해결하려면 파일을 특정 코어에 한정해 잠금 경합을 피할 수 있다.
+
+#### 객체 조회
+
+같은 파일에 여러 객체를 저장하려면 데이터 노드에 다음 정보를 알려 주는 테이블을 유지해야 한다.
 - `object_id`
-- `filename` where object is stored
-- `file_offset` where object starts
+- 객체를 저장한 `filename`
+- 객체가 시작하는 `file_offset`
 - `object_size`
 
-We can deploy this table in a file-based db like RocksDB or a traditional relational database.
-Since the access pattern is low write+high read, a relational database works better.
+이 테이블은 RocksDB 같은 파일 기반 DB나 전통적인 관계형 데이터베이스에 배포할 수 있다.
+쓰기 빈도가 낮고 읽기 빈도가 높은 접근 패턴이므로 관계형 데이터베이스가 더 적합하다.
 
-How should we deploy it?
-We could deploy the db and scale it separately in a cluster, accessed by all data nodes.
+어떻게 배포해야 할까?
+DB를 별도 클러스터에 배포해 확장하고 모든 데이터 노드가 접근하게 할 수 있다.
 
-Downsides:
-- we'd need to aggressively scale the cluster to serve all requests
-- there's additional network latency between data node and db cluster
+단점은 다음과 같다.
+- 모든 요청을 처리하려면 클러스터를 공격적으로 확장해야 한다.
+- 데이터 노드와 DB 클러스터 사이에 네트워크 지연 시간이 추가된다.
 
-An alternative is to take advantage of the fact that data nodes are only interested to data related to them,
-so we can deploy the relational db within the data node itself.
+대안은 데이터 노드가 자신과 관련된 데이터에만 관심을 둔다는 점을 활용해 관계형 DB를 데이터 노드 자체에 배포하는 것이다.
 
-SQLite is a good option as it's a lightweight file-based relational database.
+SQLite는 가벼운 파일 기반 관계형 데이터베이스이므로 좋은 선택이다.
 
-#### Updated data persistence flow
-
-<div style="margin-left:3rem">
-    <img src="./images/updated-data-persistence-flow.png" alt="updated-data-persistence-flow" width="500" />
-</div>
-
-- API Service sends a request to save a new object
-- Data node service appends the new object at the end of a file, named "/data/c"
-- A new record for the object is inserted into the object mapping table
-
-#### Durability
-
-Data durability is an important requirement in our design. In order to achieve 6 nines of durability, every failure case needs to be properly examined.
-
-First problem to address is hardware failures. We can achieve that by replicating data nodes to minimize probability of failure.
-But in addition to that, we also ought to replicate across different failure domains (cross-rack, cross-dc, separate networks, etc).
-A critical event can cause multiple hardware failures within the same domain:
+#### 개선된 데이터 영속화 흐름
 
 <div style="margin-left:3rem">
-    <img src="./images/failure-domain-isolation.png" alt="failure-domain-isolation" width="500" />
+    <img src="./images/updated-data-persistence-flow.png" alt="개선된 데이터 영속화 흐름" width="500" />
 </div>
 
-Assuming annual failure rate of a typical HDD is 0.81%, making three copies gives us 6 nines of durability.
+- API 서비스가 새 객체 저장 요청을 보낸다.
+- 데이터 노드 서비스가 "/data/c"라는 파일 끝에 새 객체를 덧붙인다.
+- 객체의 새 레코드를 객체 매핑 테이블에 삽입한다.
 
-Replicating the data nodes like that grants us the durability we want, but we could also leverage erasure coding to reduce storage costs.
+#### 내구성
 
-Erasure coding enables us to use parity bits, which allow us to reconstruct lost bits in the event of a failure:
+데이터 내구성은 설계의 중요한 요구사항이다. 식스 나인(99.9999%)의 내구성을 달성하려면 모든 장애 사례를 제대로 검토해야 한다.
+
+먼저 해결해야 할 문제는 하드웨어 장애다. 데이터 노드를 복제해 장애 확률을 최소화할 수 있다.
+그뿐 아니라 서로 다른 장애 도메인, 즉 랙 간, DC 간, 별도 네트워크 등에 걸쳐 복제해야 한다.
+중대한 사건으로 같은 도메인의 하드웨어 여러 개에 장애가 발생할 수 있기 때문이다.
 
 <div style="margin-left:3rem">
-    <img src="./images/erasure-coding.png" alt="erasure-coding" width="500" />
+    <img src="./images/failure-domain-isolation.png" alt="장애 도메인 격리" width="500" />
 </div>
 
-Imagine those bits are data nodes. If two of them go down, they can be recovered using the remaining four ones.
+일반적인 HDD의 연간 장애율을 0.81%라고 가정하면 복제본 3개로 식스 나인의 내구성을 얻을 수 있다.
 
-There are different erasure coding schemes. In our case, we could use 8+4 erasure coding, split across different failure domains to maximize reliability:
+이처럼 데이터 노드를 복제하면 원하는 내구성을 얻지만, 소거 코딩(erasure coding)을 활용해 저장 비용을 줄일 수도 있다.
+
+소거 코딩은 패리티 비트를 사용해 장애 시 손실된 비트를 재구성할 수 있게 한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/erasure-coding-across-failure-domains.png" alt="erasure-coding-across-failure-domains" width="500" />
+    <img src="./images/erasure-coding.png" alt="소거 코딩" width="500" />
 </div>
 
-Erasure coding enables us to achieve a much lower storage cost (50% improvement) at the expense of access speed due to the data routing service having to collect data from multiple locations:
+이 비트들이 데이터 노드라고 생각해 보자. 두 개가 중단되더라도 나머지 네 개를 사용해 복구할 수 있다.
+
+소거 코딩에는 여러 방식이 있다. 이 사례에서는 신뢰성을 극대화하기 위해 서로 다른 장애 도메인에 나눈 8+4 소거 코딩을 사용할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/erasure-coding-vs-replication.png" alt="erasure-coding-vs-replication" width="500" />
+    <img src="./images/erasure-coding-across-failure-domains.png" alt="장애 도메인에 걸친 소거 코딩" width="500" />
 </div>
 
-Other caveats:
-- Replication requires 200% storage overhead (in case of 3 replicas) vs. 50% via erasure coding
-- Erasure coding [gives us 11 nines of durability](https://github.com/Backblaze/erasure-coding-durability) vs 6 nines via replication
-- Erasure coding requires more computation to calculate and store parities
-
-In sum, replication is more useful for latency-sensitive applications, whereas erasure coding is attractive for storage cost efficiency and durability.
-Erasure coding is also much harder to implement.
-
-#### Correctness verification
-
-If a disk fails entirely, then the failure is easy to detect. This is less straightforward in the event part of the disk memory gets corrupted.
-
-To detect this, we can use checksums - a hash of the file contents, which can be used to verify the file's integrity.
-
-In our case, we'll store checksums for each file and each object:
+소거 코딩을 사용하면 데이터 라우팅 서비스가 여러 위치에서 데이터를 수집해야 해서 접근 속도가 느려지는 대신 저장 비용을 훨씬 낮출 수 있다(50% 개선).
 
 <div style="margin-left:3rem">
-    <img src="./images/checksums-for-correctness.png" alt="checksums-for-correctness" width="500" />
+    <img src="./images/erasure-coding-vs-replication.png" alt="소거 코딩과 복제 비교" width="500" />
 </div>
 
-In the case of erasure coding (8+4), we'll need to fetch each of the 8 pieces of data separately and verify each of their checksums.
+그 밖의 주의할 점은 다음과 같다.
+- 복제는 복제본이 3개일 때 200%의 저장 공간 오버헤드가 필요하지만 소거 코딩은 50%가 필요하다.
+- 소거 코딩은 복제의 식스 나인과 비교해 [일레븐 나인의 내구성을 제공한다](https://github.com/Backblaze/erasure-coding-durability).
+- 소거 코딩은 패리티를 계산하고 저장하는 데 더 많은 연산이 필요하다.
+
+요약하면 복제는 지연 시간에 민감한 애플리케이션에 더 유용하고, 소거 코딩은 저장 비용 효율성과 내구성 측면에서 매력적이다.
+소거 코딩은 구현하기도 훨씬 어렵다.
+
+#### 정확성 검증
+
+디스크 전체에 장애가 발생하면 장애를 쉽게 감지할 수 있다. 하지만 디스크 일부가 손상된 경우에는 감지가 그렇게 간단하지 않다.
+
+이를 감지하기 위해 파일 내용의 해시인 체크섬을 사용해 파일 무결성을 검증할 수 있다.
+
+이 설계에서는 각 파일과 각 객체의 체크섬을 저장한다.
+
+<div style="margin-left:3rem">
+    <img src="./images/checksums-for-correctness.png" alt="정확성 검증을 위한 체크섬" width="500" />
+</div>
+
+소거 코딩(8+4)을 사용하면 데이터 조각 8개를 각각 가져와 각 체크섬을 검증해야 한다.
 
 // sprint 2
 
-### **Metadata data model**
+### **메타데이터 데이터 모델**
 
-Table schemas:
+테이블 스키마는 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/metadata-data-model.png" alt="metadata-data-model" width="500" />
+    <img src="./images/metadata-data-model.png" alt="메타데이터 데이터 모델" width="500" />
 </div>
 
-Queries we need to support:
-- Find an object ID by name
-- Insert/delete object based on name
-- List objects in a bucket sharing the same prefix
+지원해야 하는 쿼리는 다음과 같다.
+- 이름으로 객체 ID 찾기
+- 이름을 기준으로 객체 삽입/삭제
+- 같은 접두사를 공유하는 버킷 내 객체 나열
 
-There is usually a limit on the number of buckets a user can create, hence, the size of the buckets table is small and can fit into a single db server.
-But we still need to scale the server for read throughput.
+일반적으로 사용자가 만들 수 있는 버킷 수에는 제한이 있으므로 버킷 테이블은 작고 단일 DB 서버에 들어갈 수 있다.
+하지만 읽기 처리량을 늘리기 위해 서버를 확장해야 한다.
 
-The object table will probably not fit into a single database server, though. Hence, we can scale the table via sharding:
-- Sharding by bucket_id will lead to hotspot issues as a bucket can have billions of objects
-- Sharding by bucket_id makes the load more evenly distributed, but our queries will be slow
-- We choose sharding by `hash(bucket_name, object_name)` since most queries are based on the object/bucket name.
+반면 객체 테이블은 단일 데이터베이스 서버에 들어가지 않을 가능성이 높다. 따라서 샤딩으로 테이블을 확장할 수 있다.
+- bucket_id로 샤딩하면 버킷에 수십억 개의 객체가 있을 수 있으므로 핫스팟 문제가 발생한다.
+- bucket_id로 샤딩하면 부하가 더 고르게 분산되지만 쿼리가 느려진다.
+- 대부분의 쿼리가 객체 및 버킷 이름을 기준으로 하므로 `hash(bucket_name, object_name)`으로 샤딩한다.
 
-Even with this sharding scheme, though, listing objects in a bucket will be slow.
+하지만 이 샤딩 방식에서도 버킷 내 객체를 나열하는 작업은 느리다.
 
-### **Listing objects in a bucket**
+### **버킷 내 객체 나열**
 
-In a single database, listing an object based on its prefix (looks like a directory) works like this:
+단일 데이터베이스에서 접두사에 따라 객체를 나열하는 작업은 디렉터리처럼 보이며 다음과 같이 작동한다.
 
 ```
 SELECT * FROM object WHERE bucket_id = "123" AND object_name LIKE `abc/%`
 ```
 
-This is challenging to fulfill when the database is sharded. To achieve it, we can run the query on every shard and aggregate the results in-memory.
-This makes pagination challenging though, since different shards contain a different result size and we need to maintain separate limit/offset for each.
+데이터베이스를 샤딩하면 이 작업을 수행하기 어렵다. 모든 샤드에서 쿼리를 실행하고 메모리에서 결과를 집계하는 방식으로 구현할 수 있다.
+그러나 샤드마다 결과 크기가 다르고 각 샤드의 limit/offset을 별도로 유지해야 하므로 페이지네이션이 까다로워진다.
 
-We can leverage the fact that typically object stores are not optimized for listing objects, so we can sacrifice listing performance.
-We can also create a denormalized table for listing objects, sharded by bucket ID.
-That would make our listing query sufficiently fast as it's isolated to a single database instance.
+일반적으로 객체 저장소는 객체 나열에 최적화되어 있지 않다는 점을 이용해 나열 성능을 희생할 수 있다.
+또는 객체 나열을 위한 비정규화 테이블을 만들어 버킷 ID로 샤딩할 수 있다.
+그러면 나열 쿼리가 단일 데이터베이스 인스턴스에 국한되므로 충분히 빨라진다.
 
-### **Object versioning**
+### **객체 버전 관리**
 
-Versioning works by having another `object_version` column which is of type TIMEUUID, enabling us to sort records based on it.
+버전 관리는 TIMEUUID 유형인 `object_version` 컬럼을 하나 더 두는 방식으로 작동하며, 이를 통해 해당 값을 기준으로 레코드를 정렬할 수 있다.
 
-Each new version produces a new `object_id`:
+새 버전마다 새 `object_id`가 생성된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/object-versioning.png" alt="object-versioning" width="500" />
+    <img src="./images/object-versioning.png" alt="객체 버전 관리" width="500" />
 </div>
 
-Deleting an object creates a new version with a special `object_id` indicating that the object was deleted. Queries for it return 404:
+객체를 삭제하면 객체가 삭제되었음을 나타내는 특수한 `object_id`를 가진 새 버전이 생성된다. 이 객체에 대한 쿼리는 404를 반환한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/deleting-versioned-object.png" alt="deleting-versioned-object" width="500" />
+    <img src="./images/deleting-versioned-object.png" alt="버전이 관리되는 객체 삭제" width="500" />
 </div>
 
-### **Optimizing uploads of large files**
+### **대용량 파일 업로드 최적화**
 
-Uploading large files can be optimized by using multipart uploads - splitting a big file into several chunks, uploaded independently:
+멀티파트 업로드를 사용하면 대용량 파일 업로드를 최적화할 수 있다. 큰 파일을 여러 청크로 나누어 각각 독립적으로 업로드한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/multipart-upload.png" alt="multipart-upload" width="500" />
+    <img src="./images/multipart-upload.png" alt="멀티파트 업로드" width="500" />
 </div>
 
-- Client calls service to initiate a multipart upload
-- Data store returns an upload ID which uniquely identifies the upload
-- Client splits the large file into several chunks, uploaded independently using the upload id
-- When a chunk is uploaded, the data store returns an etag, which is a md5 checksum, identifying that upload chunk
-- After all parts are uploaded, client sends a complete multipart upload request, which includes upload_id, part numbers and all etags
-- Data store reassembles the object from its parts. The process can take a few minutes. After that, success response is returned to the client.
+- 클라이언트가 멀티파트 업로드를 시작하도록 서비스를 호출한다.
+- 데이터 저장소는 업로드를 고유하게 식별하는 업로드 ID를 반환한다.
+- 클라이언트가 대용량 파일을 여러 청크로 나누고 업로드 ID를 사용해 각각 독립적으로 업로드한다.
+- 청크가 업로드되면 데이터 저장소는 해당 업로드 청크를 식별하는 md5 체크섬인 etag를 반환한다.
+- 모든 파트를 업로드한 후 클라이언트는 upload_id, 파트 번호, 모든 etag를 포함한 멀티파트 업로드 완료 요청을 보낸다.
+- 데이터 저장소가 파트로부터 객체를 재조립한다. 이 과정에는 몇 분이 걸릴 수 있다. 완료되면 클라이언트에 성공 응답을 반환한다.
 
-Old parts, which are no longer useful can be removed at this point. We can introduce a garbage collector to deal with it.
+더 이상 쓸모없는 오래된 파트는 이 시점에 제거할 수 있다. 이를 처리하는 가비지 컬렉터를 도입할 수 있다.
 
-### **Garbage collection**
+### **가비지 컬렉션**
 
-Garbage collection is the process of reclaiming storage space, which is no longer used. There are a few ways data becomes garbage:
-- **lazy object deletion** - object is marked as deleted without actually getting deleted
-- **orphan data** - eg an upload failed mid-flight and old parts need to be deleted
-- **corrupted data** - data which failed checksum verification
+가비지 컬렉션은 더 이상 사용하지 않는 저장 공간을 회수하는 과정이다. 데이터가 가비지가 되는 경우는 몇 가지가 있다.
+- **지연 객체 삭제** - 객체를 실제로 삭제하지 않고 삭제된 것으로 표시한다.
+- **고아 데이터** - 예를 들어 업로드가 도중에 실패해 오래된 파트를 삭제해야 하는 경우다.
+- **손상된 데이터** - 체크섬 검증에 실패한 데이터다.
 
-The garbage collector is also responsible for reclaiming unused space in replicas.
-With replication, data is deleted from both primaries and replicas. With erasure coding (8+4), data is deleted from all 12 nodes.
+가비지 컬렉터는 복제본에서 사용하지 않는 공간도 회수한다.
+복제를 사용하면 주 데이터와 복제본 모두에서 데이터를 삭제한다. 소거 코딩(8+4)을 사용하면 노드 12개 모두에서 데이터를 삭제한다.
 
-To facilitate the deletion, we'll use a process called compaction:
-- Garbage collector copies objects which are not deleted from "data/b" to "data/d"
-- `object_mapping` table is updated once copying is complete using a database transaction
-- To avoid making too many small files, compaction is done on files which grow beyond a certain threshold
+삭제를 수행하기 위해 컴팩션이라는 프로세스를 사용한다.
+- 가비지 컬렉터가 삭제되지 않은 객체를 "data/b"에서 "data/d"로 복사한다.
+- 복사가 완료되면 데이터베이스 트랜잭션을 사용해 `object_mapping` 테이블을 업데이트한다.
+- 작은 파일이 지나치게 많이 생기지 않도록 일정 임계값을 넘은 파일에 컴팩션을 수행한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/compaction.png" alt="compaction" width="500" />
+    <img src="./images/compaction.png" alt="컴팩션" width="500" />
 </div>
 
 ---
 
-## Step 4: Wrap Up
+## 4단계: 마무리
 
-Things we covered:
-- Designing an S3-like object storage
-- Comparing differences between object, block and file storages
-- Covered uploading, downloading, listing, versioning of objects in a bucket
-- Deep dived in the design - data store and metadata store, replication and erasure coding, multipart uploads, sharding
+다룬 내용은 다음과 같다.
+- S3 유사 객체 저장소 설계
+- 객체 저장소, 블록 저장소, 파일 저장소의 차이 비교
+- 버킷 내 객체의 업로드, 다운로드, 목록 조회, 버전 관리
+- 데이터 저장소와 메타데이터 저장소, 복제와 소거 코딩, 멀티파트 업로드, 샤딩의 상세 설계

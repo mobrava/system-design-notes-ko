@@ -1,45 +1,45 @@
-# Chapter 27: Digital Wallet
+# 27장: 전자 지갑
 
-## Introduction
-**Payment platforms** usually have a **wallet service**, where they allow clients to store funds within the application, which they can withdraw later.
+## 소개
+**결제 플랫폼**에는 일반적으로 **지갑 서비스**가 있다. 고객은 애플리케이션 안에 자금을 보관했다가 나중에 인출할 수 있다.
 
-You can also use it to pay for goods & services or transfer money to other users, who use the **digital wallet** service. That can be faster and cheaper than doing it via normal payment rails.
+이를 사용해 상품과 서비스의 대금을 결제하거나 **전자 지갑** 서비스를 사용하는 다른 사용자에게 송금할 수도 있다. 일반적인 결제망을 이용하는 것보다 빠르고 저렴할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/digital-wallet.png" alt="digital-wallet" width="500" />
+    <img src="./images/digital-wallet.png" alt="전자 지갑" width="500" />
 </div>
 
 ---
 
-## Step 1: Understand the Problem and Establish Design Scope
- * C: Should we only focus on transfers between digital wallets? Should we support any other operations?
- * I: Let's focus on transfers between digital wallets for now.
- * C: How many transactions per second does the system need to support?
- * I: Let's assume 1mil TPS
- * C: A digital wallet has strict correctness requirements. Can we assume transactional guarantees are sufficient?
- * I: Sounds good
- * C: Do we need to prove correctness?
- * I: We can do that via reconciliation, but that only detects discrepancies vs. showing us the root cause for them. Instead, we want to be able to replay data from the beginning to reconstruct the history.
- * C: Can we assume availability requirement is 99.99%?
- * I: Yes
- * C: Do we need to take foreign exchange into consideration?
- * I: No, it's out of scope
+## 1단계: 문제 이해 및 설계 범위 확정
+ * 지원자: 전자 지갑 간 이체에만 집중해야 하는가? 다른 연산도 지원해야 하는가?
+ * 면접관: 지금은 전자 지갑 간 이체에 집중하자.
+ * 지원자: 시스템이 초당 몇 건의 거래를 지원해야 하는가?
+ * 면접관: 100만 TPS라고 가정하자.
+ * 지원자: 전자 지갑에는 엄격한 정확성 요구사항이 있다. 트랜잭션 보장으로 충분하다고 가정해도 되는가?
+ * 면접관: 좋다.
+ * 지원자: 정확성을 입증해야 하는가?
+ * 면접관: 대사로 입증할 수 있지만, 대사는 불일치의 근본 원인을 보여 주기보다는 불일치 자체만 감지한다. 대신 처음부터 데이터를 재생해 이력을 재구성할 수 있어야 한다.
+ * 지원자: 가용성 요구사항은 99.99%라고 가정해도 되는가?
+ * 면접관: 그렇다.
+ * 지원자: 외환을 고려해야 하는가?
+ * 면접관: 아니다. 범위에서 제외한다.
 
-Here's what we have to support in summary:
- * Support balance transfers between two accounts
- * Support 1mil TPS
- * Reliability is 99.99%
- * Support transactions
- * Support reproducibility
+지원해야 할 내용을 요약하면 다음과 같다.
+ * 두 계좌 간 잔액 이체를 지원한다.
+ * 100만 TPS를 지원한다.
+ * 신뢰성은 99.99%이다.
+ * 트랜잭션을 지원한다.
+ * 재현성을 지원한다.
 
-### **Back-of-the-envelope estimation**
-A traditional relational database, provisioned in the cloud can support ~1000 TPS.
+### **개략적 규모 추정**
+클라우드에 프로비저닝한 전통적인 관계형 데이터베이스는 약 1000 TPS를 지원할 수 있다.
 
-In order to reach 1mil TPS, we'd need 1000 database nodes. But if each transfer has two legs, then we actually need to support 2mil TPS.
+100만 TPS에 도달하려면 데이터베이스 노드 1000개가 필요하다. 하지만 각 이체가 두 개의 처리 단위로 이루어진다면 실제로는 200만 TPS를 지원해야 한다.
 
-One of our design goals would be to increase the TPS a single node can handle so that we can have less database nodes.
+설계 목표 중 하나는 단일 노드가 처리할 수 있는 TPS를 늘려 데이터베이스 노드 수를 줄이는 것이다.
 
-| Per-node TPS | Node Number |
+| 노드당 TPS | 노드 수 |
 |--------------|-------------|
 | 100          | 20,000      |
 | 1,000        | 2,000       |
@@ -47,17 +47,17 @@ One of our design goals would be to increase the TPS a single node can handle so
 
 ---
 
-## Step 2: Propose High-Level Design and Get Buy-In
+## 2단계: 개략적 설계안 제시 및 동의 구하기
 
-### **API Design**
-We only need to support one endpoint for this interview:
+### **API 설계**
+이 면접에서는 엔드포인트 하나만 지원하면 된다.
 ```
 POST /v1/wallet/balance_transfer - transfers balance from one wallet to another
 ```
 
-Request parameters - from_account, to_account, amount (string to not lose precision), currency, transaction_id (idempotency key).
+요청 매개변수는 from_account, to_account, amount(정밀도 손실을 피하기 위한 string), currency, transaction_id(멱등성 키)이다.
 
-Sample response:
+응답 예시는 다음과 같다.
 ```
 {
     "status": "success"
@@ -65,357 +65,357 @@ Sample response:
 }
 ```
 
-### **In-memory sharding solution**
-Our wallet application maintains account balances for every user account.
+### **인메모리 샤딩 방안**
+지갑 애플리케이션은 모든 사용자 계좌의 잔액을 관리한다.
 
-One good data structure to represent this is a `map<user_id, balance>`, which can be implemented using an in-memory Redis store.
+이를 표현하기에 적합한 자료 구조는 `map<user_id, balance>`이며, 인메모리 Redis 저장소를 사용해 구현할 수 있다.
 
-Since one redis node cannot withstand 1mil TPS, we need to partition our redis cluster into multiple nodes.
+Redis 노드 하나로는 100만 TPS를 감당할 수 없으므로 Redis 클러스터를 여러 노드로 파티셔닝해야 한다.
 
-Example partitioning algorithm:
+파티셔닝 알고리즘의 예시는 다음과 같다.
 ```
 String accountID = "A";
 Int partitionNumber = 7;
 Int myPartition = accountID.hashCode() % partitionNumber;
 ```
 
-Zookeeper can be used to store the number of partitions and addresses of redis nodes as it's a highly-available configuration storage. 
+Zookeeper는 고가용성 구성 저장소이므로 파티션 수와 Redis 노드 주소를 저장하는 데 사용할 수 있다.
 
-Finally, a wallet service is a stateless service responsible for carrying out transfer operations. It can easily scale horizontally:
-
-<div style="margin-left:3rem">
-    <img src="./images/wallet-service.png" alt="wallet-service" width="500" />
-</div>
-
-Although this solution addresses scalability concerns, it doesn't allow us to execute balance transfers atomically.
-
-### **Distributed transactions**
-One approach for handling transactions is to use the two-phase commit protocol on top of standard, sharded relational databases:
+마지막으로 지갑 서비스는 이체 연산을 수행하는 무상태 서비스이다. 수평 확장이 쉽다.
 
 <div style="margin-left:3rem">
-    <img src="./images/distributed-transactions-relational-dbs.png" alt="distributed-transactions-relational-dbs" width="500" />
+    <img src="./images/wallet-service.png" alt="지갑 서비스" width="500" />
 </div>
 
-Here's how the two-phase commit (2PC) protocol works:
+이 방안은 확장성 문제를 해결하지만 잔액 이체를 원자적으로 실행할 수는 없다.
+
+### **분산 트랜잭션**
+트랜잭션을 처리하는 한 가지 방법은 샤딩된 표준 관계형 데이터베이스 위에서 2단계 커밋 프로토콜을 사용하는 것이다.
 
 <div style="margin-left:3rem">
-    <img src="./images/2pc-protocol.png" alt="2pc-protocol" width="500" />
+    <img src="./images/distributed-transactions-relational-dbs.png" alt="관계형 데이터베이스를 이용한 분산 트랜잭션" width="500" />
 </div>
 
- * Coordinator (wallet service) performs read and write operations on multiple databases as normal
- * When application is ready to commit the transaction, coordinator asks all databases to prepare it
- * If all databases replied with a "yes", then the coordinator asks the databases to commit the transaction.
- * Otherwise, all databases are asked to abort the transaction
+2단계 커밋(two-phase commit, 2PC) 프로토콜은 다음과 같이 작동한다.
 
-Downsides to the 2PC approach:
- * Not performant due to lock contention
- * The coordinator is a single point of failure
+<div style="margin-left:3rem">
+    <img src="./images/2pc-protocol.png" alt="2PC 프로토콜" width="500" />
+</div>
 
-### **Distributed transaction using Try-Confirm/Cancel (TC/C)**
-TC/C is a variation of the 2PC protocol, which works with compensating transactions:
- * Coordinator asks all databases to reserve resources for the transaction
- * Coordinator collects replies from DBs - if yes, DBs are asked to try-confirm. If no, DBs are asked to try-cancel.
+ * 조정자(지갑 서비스)가 평소처럼 여러 데이터베이스에서 읽기 및 쓰기 연산을 수행한다.
+ * 애플리케이션이 트랜잭션을 커밋할 준비가 되면 조정자가 모든 데이터베이스에 준비를 요청한다.
+ * 모든 데이터베이스가 "예"라고 응답하면 조정자가 데이터베이스에 트랜잭션 커밋을 요청한다.
+ * 그렇지 않으면 모든 데이터베이스에 트랜잭션 중단을 요청한다.
 
-One important difference between TC/C and 2PC is that 2PC performs a single transaction, whereas in TC/C, there are two independent transactions.
+2PC 접근법의 단점은 다음과 같다.
+ * 잠금 경합 때문에 성능이 좋지 않다.
+ * 조정자가 단일 장애점이다.
 
-Here's how TC/C works in phases:
+### **시도-확정/취소(Try-Confirm/Cancel, TC/C)를 이용한 분산 트랜잭션**
+TC/C는 보상 트랜잭션과 함께 작동하는 2PC 프로토콜의 변형이다.
+ * 조정자가 모든 데이터베이스에 트랜잭션을 위한 리소스 예약을 요청한다.
+ * 조정자가 DB의 응답을 수집한다. 응답이 예이면 DB에 확정을 요청하고, 아니면 취소를 요청한다.
 
-| Phase | Operation | A                   | C                   |
+TC/C와 2PC의 중요한 차이점은 2PC는 단일 트랜잭션을 수행하지만 TC/C에는 서로 독립적인 트랜잭션 두 개가 있다는 것이다.
+
+TC/C의 단계별 작동 방식은 다음과 같다.
+
+| 단계 | 연산 | A                   | C                   |
 |-------|-----------|---------------------|---------------------|
-| 1     | Try       | Balance change: -$1 | Do nothing          |
-| 2     | Confirm   | Do nothing          | Balance change: +$1 |
-|       | Cancel    | Balance change: +$1 | Do Nothing          |
+| 1     | 시도       | 잔액 변경: -$1 | 아무 작업도 하지 않음          |
+| 2     | 확정   | 아무 작업도 하지 않음          | 잔액 변경: +$1 |
+|       | 취소    | 잔액 변경: +$1 | 아무 작업도 하지 않음          |
 
-Phase 1 - try:
-
-<div style="margin-left:3rem">
-    <img src="./images/try-phase.png" alt="try-phase" width="500" />
-</div>
-
- * coordinator starts local transaction in A's DB to reduce A's balance by 1$
- * C's DB is given a NOP instruction, which does nothing
-
-Phase 2a - confirm:
+1단계 - 시도:
 
 <div style="margin-left:3rem">
-    <img src="./images/confirm-phase.png" alt="confirm-phase" width="500" />
+    <img src="./images/try-phase.png" alt="시도 단계" width="500" />
 </div>
 
- * if both DBs replied with "yes", confirm phase starts.
- * A's DB receives NOP, whereas C's DB is instructed to increase C's balance by 1$ (local transaction)
+ * 조정자가 A의 DB에서 로컬 트랜잭션을 시작해 A의 잔액을 1$ 줄인다.
+ * C의 DB에는 아무 작업도 하지 않는 NOP 명령을 전달한다.
 
-Phase 2b - cancel:
+2a단계 - 확정:
 
 <div style="margin-left:3rem">
-    <img src="./images/cancel-phase.png" alt="cancel-phase" width="500" />
+    <img src="./images/confirm-phase.png" alt="확정 단계" width="500" />
 </div>
 
- * If any of the operations in phase 1 fails, the cancel phase starts.
- * A's DB is instructed to increase A's balance by 1$, C's DB receives NOP
+ * 두 DB가 모두 "예"라고 응답하면 확정 단계를 시작한다.
+ * A의 DB는 NOP를 받고, C의 DB에는 C의 잔액을 1$ 늘리라는 명령을 내린다(로컬 트랜잭션).
 
-Here's a comparison between 2PC and TC/C:
+2b단계 - 취소:
 
-|      | First Phase                                            | Second Phase: success              | Second Phase: fail                        |
+<div style="margin-left:3rem">
+    <img src="./images/cancel-phase.png" alt="취소 단계" width="500" />
+</div>
+
+ * 1단계의 연산 중 하나라도 실패하면 취소 단계를 시작한다.
+ * A의 DB에는 A의 잔액을 1$ 늘리라는 명령을 내리고, C의 DB에는 NOP를 전달한다.
+
+2PC와 TC/C를 비교하면 다음과 같다.
+
+|      | 첫 번째 단계                                            | 두 번째 단계: 성공              | 두 번째 단계: 실패                        |
 |------|--------------------------------------------------------|------------------------------------|-------------------------------------------|
-| 2PC  | transactions are not done yet                          | Commit/Cancel all transactions     | Cancel all transactions                   |
-| TC/C | All transactions are completed - committed or canceled | Execute new transactions if needed | Reverse the already committed transaction |
+| 2PC  | 트랜잭션이 아직 완료되지 않음                          | 모든 트랜잭션 커밋/취소     | 모든 트랜잭션 취소                   |
+| TC/C | 모든 트랜잭션이 커밋 또는 취소되어 완료됨 | 필요하면 새 트랜잭션 실행 | 이미 커밋한 트랜잭션 되돌리기 |
 
-TC/C is also referred to as a distributed transaction by compensation. High-level operation is handled in the business logic.
+TC/C는 보상 기반 분산 트랜잭션이라고도 한다. 개략적인 연산은 비즈니스 로직에서 처리한다.
 
-Other properties of TC/C:
- * database agnostic, as long as database supports transactions
- * Details and complexity of distributed transactions need to be handled in the business logic
+TC/C의 다른 특성은 다음과 같다.
+ * 데이터베이스가 트랜잭션을 지원하기만 하면 특정 데이터베이스에 종속되지 않는다.
+ * 분산 트랜잭션의 세부 사항과 복잡성을 비즈니스 로직에서 처리해야 한다.
 
-### **TC/C Failure modes**
-If the coordinator dies mid-flight, it needs to recover its intermediary state. 
-That can be done by maintaining phase status tables, atomically updated within the database shards:
-
-<div style="margin-left:3rem">
-    <img src="./images/phase-status-tables.png" alt="phase-status-tables" width="500" />
-</div>
-
-What does that table contain:
- * ID and content of distributed transaction
- * status of try phase - not sent, has been sent, response received
- * second phase name - confirm or cancel
- * status of second phase
- * out-of-order flag (explained later)
-
-One caveat when using TC/C is that there is a brief moment where the account states are inconsistent with each other while a distributed transaction is in-flight:
+### **TC/C 실패 유형**
+조정자가 작업 도중 중단되면 중간 상태를 복구해야 한다.
+데이터베이스 샤드 내에서 원자적으로 갱신되는 단계 상태 테이블을 유지해 복구할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/unbalanced-state.png" alt="unbalanced-state" width="500" />
+    <img src="./images/phase-status-tables.png" alt="단계 상태 테이블" width="500" />
 </div>
 
-This is fine as long as we always recover from this state and that users cannot use the intermediary state to eg spend it. 
-This is guaranteed by always executing deductions prior to additions.
+이 테이블에는 다음 내용이 포함된다.
+ * 분산 트랜잭션의 ID와 내용
+ * 시도 단계의 상태 - 전송 전, 전송 완료, 응답 수신
+ * 두 번째 단계의 이름 - 확정 또는 취소
+ * 두 번째 단계의 상태
+ * 순서 역전 플래그(뒤에서 설명)
 
-| Try phase choices  | Account A | Account C |
+TC/C를 사용할 때 한 가지 유의할 점은 분산 트랜잭션이 진행되는 동안 잠깐 계좌들의 상태가 서로 일관되지 않는다는 것이다.
+
+<div style="margin-left:3rem">
+    <img src="./images/unbalanced-state.png" alt="불균형 상태" width="500" />
+</div>
+
+항상 이 상태에서 복구하고 사용자가 중간 상태를 이용해 돈을 쓰는 등의 행동을 할 수 없다면 문제가 없다.
+차감 연산을 잔액 증가 연산보다 항상 먼저 실행해 이를 보장한다.
+
+| 시도 단계 선택지  | 계좌 A | 계좌 C |
 |--------------------|-----------|-----------|
-| Choice 1           | -$1       | NOP       |
-| Choice 2 (invalid) | NOP       | +$1       |
-| Choice 3 (invalid) | -$1       | +$1       |
+| 선택지 1           | -$1       | NOP       |
+| 선택지 2(유효하지 않음) | NOP       | +$1       |
+| 선택지 3(유효하지 않음) | -$1       | +$1       |
 
-Note that choice 3 from table above is invalid because we cannot guarantee atomic execution of transactions across different databases without relying on 2PC.
+2PC에 의존하지 않고서는 서로 다른 데이터베이스에 걸친 트랜잭션의 원자적 실행을 보장할 수 없으므로 위 표의 선택지 3은 유효하지 않다.
 
-One edge-case to address is out of order execution:
-
-<div style="margin-left:3rem">
-    <img src="./images/out-of-order-execution.png" alt="out-of-order-execution" width="500" />
-</div>
-
-It is possible that a database receives a cancel operation, before receiving a try. This edge case can be handled by adding an out of order flag in our phase status table.
-When we receive a try operation, we first check if the out of order flag is set and if so, a failure is returned.
-
-### **Distributed transaction using Saga**
-Another popular approach is using Sagas - a standard for implementing distributed transactions with microservice architectures.
-
-Here's how it works:
- * all operations are ordered in a sequence. All operations are independent in their own databases.
- * operations are executed from first to last
- * when an operation fails, the entire process starts to roll back until the beginning with compensating operations
+처리해야 할 한 가지 경계 사례는 순서가 뒤바뀐 실행이다.
 
 <div style="margin-left:3rem">
-    <img src="./images/saga.png" alt="saga" width="500" />
+    <img src="./images/out-of-order-execution.png" alt="순서가 뒤바뀐 실행" width="500" />
 </div>
 
-How do we coordinate the workflow? There are two approaches we can take:
- * Choreography - all services involved in a saga subscribe to the related events and do their part in the saga
- * Orchestration - a single coordinator instructs all services to do their jobs in the correct order
+데이터베이스가 시도 연산을 받기 전에 취소 연산을 받을 수 있다. 단계 상태 테이블에 순서 역전 플래그를 추가해 이 경계 사례를 처리할 수 있다.
+시도 연산을 받으면 먼저 순서 역전 플래그가 설정되어 있는지 확인하고, 설정되어 있다면 실패를 반환한다.
 
-The challenge of using choreography is that business logic is split across multiple service, which communicate asynchronously.
-The orchestration approach handles complexity well, so it is typically the preferred approach in a digital wallet system.
+### **Saga를 이용한 분산 트랜잭션**
+또 다른 널리 쓰이는 접근법은 마이크로서비스 아키텍처에서 분산 트랜잭션을 구현하는 표준인 Saga를 사용하는 것이다.
 
-Here's a comparison between TC/C and Saga:
+작동 방식은 다음과 같다.
+ * 모든 연산을 순서대로 나열한다. 각 연산은 자체 데이터베이스에서 서로 독립적이다.
+ * 연산을 처음부터 마지막까지 실행한다.
+ * 연산 하나가 실패하면 보상 연산을 수행하며 전체 프로세스를 시작 지점까지 롤백한다.
+
+<div style="margin-left:3rem">
+    <img src="./images/saga.png" alt="Saga" width="500" />
+</div>
+
+워크플로를 어떻게 조율하는가? 사용할 수 있는 접근법은 두 가지이다.
+ * 코레오그래피(Choreography) - Saga에 관여하는 모든 서비스가 관련 이벤트를 구독하고 Saga에서 맡은 작업을 수행한다.
+ * 오케스트레이션(Orchestration) - 단일 조정자가 모든 서비스에 올바른 순서로 작업을 수행하도록 지시한다.
+
+코레오그래피를 사용하면 비즈니스 로직이 비동기로 통신하는 여러 서비스에 분산된다는 문제가 있다.
+오케스트레이션 접근법은 복잡성을 잘 처리하므로 일반적으로 전자 지갑 시스템에서 선호한다.
+
+TC/C와 Saga를 비교하면 다음과 같다.
 
 |                                           | TC/C            | Saga                     |
 |-------------------------------------------|-----------------|--------------------------|
-| Compensating action                       | In Cancel phase | In rollback phase        |
-| Central coordination                      | Yes             | Yes (orchestration mode) |
-| Operation execution order                 | any             | linear                   |
-| Parallel execution possibility            | Yes             | No (linear execution)    |
-| Could see the partial inconsistent status | Yes             | Yes                      |
-| Application or database logic             | Application     | Application              |
+| 보상 작업                       | 취소 단계에서 | 롤백 단계에서        |
+| 중앙 조정                      | 예             | 예(오케스트레이션 모드) |
+| 연산 실행 순서                 | 임의             | 선형                   |
+| 병렬 실행 가능 여부            | 예             | 아니요(선형 실행)    |
+| 부분적으로 일관되지 않은 상태가 보일 수 있음 | 예             | 예                      |
+| 애플리케이션 또는 데이터베이스 로직             | 애플리케이션     | 애플리케이션              |
 
-The main difference is that TC/C is parallelizable, so our decision is based on the latency requirement - if we need to achieve low latency, we should go for the TC/C approach.
+주요 차이점은 TC/C를 병렬화할 수 있다는 것이다. 따라서 지연 시간 요구사항에 따라 결정하며, 낮은 지연 시간을 달성해야 한다면 TC/C 접근법을 선택해야 한다.
 
-Regardless of the approach we take, we still need to support auditing and replaying history to recover from failed states.
+어떤 접근법을 선택하든 실패 상태에서 복구하려면 감사와 이력 재생을 지원해야 한다.
 
-### **Event sourcing**
-In real-life, a digital wallet application might be audited and we have to answer certain questions:
- * Do we know the account balance at any given time?
- * How do we know the historical and current balances are correct?
- * How do we prove the system logic is correct after a code change?
+### **이벤트 소싱**
+실제 전자 지갑 애플리케이션은 감사를 받을 수 있으며 다음 질문에 답해야 한다.
+ * 특정 시점의 계좌 잔액을 알고 있는가?
+ * 과거 및 현재 잔액이 정확하다는 것을 어떻게 아는가?
+ * 코드를 변경한 후 시스템 로직이 정확하다는 것을 어떻게 입증하는가?
 
-Event sourcing is a technique which helps us answer these questions.
+이벤트 소싱(event sourcing)은 이러한 질문에 답하는 데 도움이 되는 기법이다.
 
-It consists of four concepts:
- * command - intended action from the real world, eg transfer 1$ from account A to B. Need to have a global order, due to which they're put into a FIFO queue.
-   * commands, unlike events, can fail and have some randomness due to eg IO or invalid state.
-   * commands can produce zero or more events
-   * event generation can contain randomness such as external IO. This will be revisited later
- * event - historical facts about events which occured in the system, eg "transferred 1$ from A to B".
-   * unlike commands, events are facts that have happened within our system
-   * similar to commands, they need to be ordered, hence, they're enqueued in a FIFO queue
- * state - what has changed as a result of an event. Eg a key-value store between account and their balances.
- * state machine - drives the event sourcing process. It mainly validates commands and applies events to update the system state.
-   * the state machine should be deterministic, hence, it shouldn't read external IO or rely on randomness. 
+이벤트 소싱은 네 가지 개념으로 구성된다.
+ * 명령(command) - 현실 세계에서 의도한 작업이다. 예를 들어 계좌 A에서 B로 1$를 이체하는 것이다. 전역 순서가 필요하므로 FIFO 큐에 넣는다.
+   * 명령은 이벤트와 달리 실패할 수 있으며, IO나 유효하지 않은 상태 등으로 인해 비결정성이 일부 존재할 수 있다.
+   * 명령은 0개 이상의 이벤트를 생성할 수 있다.
+   * 이벤트 생성에는 외부 IO 같은 비결정성이 포함될 수 있다. 뒤에서 다시 살펴본다.
+ * 이벤트(event) - 시스템에서 과거에 발생한 일에 관한 사실이다. 예를 들어 "A에서 B로 1$를 이체했다"가 있다.
+   * 이벤트는 명령과 달리 시스템 내에서 이미 발생한 사실이다.
+   * 명령과 마찬가지로 순서가 필요하므로 FIFO 큐에 넣는다.
+ * 상태(state) - 이벤트의 결과로 변경된 내용이다. 예를 들어 계좌와 잔액 사이의 키-값 저장소가 있다.
+ * 상태 머신(state machine) - 이벤트 소싱 프로세스를 구동한다. 주로 명령을 검증하고 이벤트를 적용해 시스템 상태를 갱신한다.
+   * 상태 머신은 결정적이어야 하므로 외부 IO를 읽거나 무작위성에 의존해서는 안 된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/event-sourcing.png" alt="event-sourcing" width="500" />
+    <img src="./images/event-sourcing.png" alt="이벤트 소싱" width="500" />
 </div>
 
-Here's a dynamic view of event sourcing:
+이벤트 소싱의 동적 관점은 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/dynamic-event-sourcing.png" alt="dynamic-event-sourcing" width="500" />
+    <img src="./images/dynamic-event-sourcing.png" alt="동적 이벤트 소싱" width="500" />
 </div>
 
-For our wallet service, the commands are balance transfer requests. We can put them in a FIFO queue, such as Kafka:
+지갑 서비스에서 명령은 잔액 이체 요청이다. 이를 Kafka 같은 FIFO 큐에 넣을 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/command-queue.png" alt="command-queue" width="500" />
+    <img src="./images/command-queue.png" alt="명령 큐" width="500" />
 </div>
 
-Here's the full picture:
+전체 모습은 다음과 같다.
 
 <div style="margin-left:3rem">
-    <img src="./images/wallet-service-state-macghine.png" alt="wallet-service-state-machine" width="500" />
+    <img src="./images/wallet-service-state-macghine.png" alt="지갑 서비스 상태 머신" width="500" />
 </div>
 
- * state machine reads commands from the command queue
- * balance state is read from the database
- * command is validated. If valid, two events for each of the accounts is generated
- * next event is read and applied by updating the balance (state) in the database
+ * 상태 머신이 명령 큐에서 명령을 읽는다.
+ * 데이터베이스에서 잔액 상태를 읽는다.
+ * 명령을 검증한다. 유효하면 두 계좌 각각에 대한 이벤트를 하나씩, 총 두 개 생성한다.
+ * 다음 이벤트를 읽고 데이터베이스의 잔액(상태)을 갱신해 적용한다.
 
-The main advantage of using event sourcing is its reproducibility. In this design, all state update operations are saved as immutable history of all balance changes.
+이벤트 소싱의 주요 장점은 재현성이다. 이 설계에서는 모든 상태 갱신 연산을 전체 잔액 변경에 관한 불변 이력으로 저장한다.
 
-Historical balances can always be reconstructed by replaying events from the beginning. 
-Because the event list is immutable and the state machine is deterministic, we are guaranteed to succeed in replaying any of the intermediary states.
+처음부터 이벤트를 재생하면 언제든 과거 잔액을 재구성할 수 있다.
+이벤트 목록은 불변이고 상태 머신은 결정적이므로 어떤 중간 상태도 재생할 수 있음이 보장된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/historical-states.png" alt="historical-states" width="500" />
+    <img src="./images/historical-states.png" alt="과거 상태" width="500" />
 </div>
 
-All audit-related questions asked in the beginning of the section can be addressed by relying on event sourcing:
- * Do we know the account balance at any given time? - events can be replayed from the start until the point which we are interested in
- * How do we know the historical and current balances are correct? - correctness can be verified by recalculating all events from the start
- * How do we prove the system logic is correct after a code change? - we can run different versions of the code against the events and verify their results are identical
+이벤트 소싱에 의존하면 이 절의 시작 부분에서 제시한 감사 관련 질문에 모두 답할 수 있다.
+ * 특정 시점의 계좌 잔액을 알고 있는가? - 처음부터 관심 있는 시점까지 이벤트를 재생할 수 있다.
+ * 과거 및 현재 잔액이 정확하다는 것을 어떻게 아는가? - 처음부터 모든 이벤트를 다시 계산해 정확성을 검증할 수 있다.
+ * 코드를 변경한 후 시스템 로직이 정확하다는 것을 어떻게 입증하는가? - 이벤트에 대해 서로 다른 코드 버전을 실행하고 결과가 같은지 확인할 수 있다.
 
-Answering client queries about their balance can be addressed using the CQRS architecture - there can be multiple read-only state machines which are responsible for querying the historical state, based on the immutable events list:
+고객의 잔액 조회에 응답할 때 CQRS 아키텍처를 사용할 수 있다. 여러 읽기 전용 상태 머신이 불변 이벤트 목록을 바탕으로 과거 상태를 조회하도록 할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/cqrs-architecture.png" alt="cqrs-architecture" width="500" />
+    <img src="./images/cqrs-architecture.png" alt="CQRS 아키텍처" width="500" />
 </div>
 
 ---
 
-## Step 3: Design Deep Dive
-In this section we'll explore some performance optimizations as we're still required to scale to 1mil TPS.
+## 3단계: 상세 설계
+여전히 100만 TPS까지 확장해야 하므로 이 절에서는 몇 가지 성능 최적화를 살펴본다.
 
-### **High-performance event sourcing**
-The first optimization we'll explore is to save commands and events into local disk store instead of an external store such as Kafka.
+### **고성능 이벤트 소싱**
+첫 번째로 살펴볼 최적화는 명령과 이벤트를 Kafka 같은 외부 저장소 대신 로컬 디스크 저장소에 저장하는 것이다.
 
-This avoids the network latency and also, since we're only doing appends, that operation is generally fast for HDDs.
+이렇게 하면 네트워크 지연 시간을 피할 수 있고 데이터 끝에 추가하는 연산만 수행하므로 일반적으로 HDD에서도 빠르다.
 
-The next optimization is to cache recent commands and events in-memory in order to save the time of loading them back from disk.
+다음 최적화는 최근 명령과 이벤트를 인메모리에 캐시해 디스크에서 다시 불러오는 시간을 줄이는 것이다.
 
-At a low-level, we can achieve the aforementioned optimizations by leveraging a command called mmap, which stores data in local disk as well as cache it in-memory:
-
-<div style="margin-left:3rem">
-    <img src="./images/mmap-optimization.png" alt="mmap-optimization" width="500" />
-</div>
-
-The next optimization we can do is also store state in the local file system using SQLite - a file-based local relational database. RocksDB is also another good option.
-
-For our purposes, we'll choose RocksDB because it uses a log-structured merge-tree (LSM), which is optimized for write operations.
-Read performance is optimized via caching.
+저수준에서는 데이터를 로컬 디스크에 저장하면서 인메모리에도 캐시하는 mmap이라는 명령을 활용해 앞의 최적화를 구현할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/rocks-db-approach.png" alt="rocks-db-approach" width="500" />
+    <img src="./images/mmap-optimization.png" alt="mmap 최적화" width="500" />
 </div>
 
-To optimize the reproducibility, we can periodically save snapshots to disk so that we don't have to reproduce a given state from the very beginning every time. We could store snapshots as large binary files in distributed file storage, eg HDFS:
+다음으로 할 수 있는 최적화는 파일 기반 로컬 관계형 데이터베이스인 SQLite를 사용해 로컬 파일 시스템에 상태도 저장하는 것이다. RocksDB도 좋은 선택이다.
+
+여기서는 쓰기 연산에 최적화된 로그 구조 병합 트리(log-structured merge-tree, LSM)를 사용하는 RocksDB를 선택한다.
+읽기 성능은 캐시를 통해 최적화한다.
 
 <div style="margin-left:3rem">
-    <img src="./images/snapshot-approach.png" alt="snapshot-approach" width="500" />
+    <img src="./images/rocks-db-approach.png" alt="RocksDB 접근법" width="500" />
 </div>
 
-### **Reliable high-performance event sourcing**
-All the optimizations done so far are great, but they make our service stateful. We need to introduce some form of replication for reliability purposes.
-
-Before we do that, we should analyze what kind of data needs high reliability in our system:
- * state and snapshot can always be regenerated by reproducing them from the events list. Hence, we only need to guarantee the event list reliability.
- * one might think we can always regenerate the events list from the command list, but that is not true, since commands are non-deterministic.
- * conclusion is that we need to ensure high reliability for the events list only
-
-In order to achieve high reliability for events, we need to replicate the list across multiple nodes. We need to guarantee:
- * that there is no data loss
- * the relative order of data within a log file remains the same across replicas
-
-To achieve this, we can employ a consensus algorithm, such as Raft.
-
-With Raft, there is a leader who is active and there are followers who are passive. If a leader dies, one of the followers picks up. 
-As long as more than half of the nodes are up, the system continues running.
+상태 재현 성능을 최적화하기 위해 스냅샷을 주기적으로 디스크에 저장하면 매번 처음부터 특정 상태를 재현할 필요가 없다. 스냅샷은 HDFS 같은 분산 파일 저장소에 큰 바이너리 파일로 저장할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/raft-replication.png" alt="raft-replication" width="500" />
+    <img src="./images/snapshot-approach.png" alt="스냅샷 접근법" width="500" />
 </div>
 
-With this approach, all nodes update the state, based on the events list. Raft ensures leader and followers have the same events list.
+### **신뢰할 수 있는 고성능 이벤트 소싱**
+지금까지 수행한 최적화는 모두 유용하지만 서비스가 상태를 가지게 만든다. 신뢰성을 위해 어떤 형태로든 복제를 도입해야 한다.
 
-### **Distributed event sourcing**
-So far, we've managed to design a system which has high single-node performance and is reliable.
+그러기 전에 시스템에서 어떤 데이터에 높은 신뢰성이 필요한지 분석해야 한다.
+ * 상태와 스냅샷은 이벤트 목록에서 재현해 언제든 다시 생성할 수 있다. 따라서 이벤트 목록의 신뢰성만 보장하면 된다.
+ * 명령 목록에서 이벤트 목록을 언제든 다시 생성할 수 있다고 생각할 수 있지만, 명령은 비결정적이므로 그렇지 않다.
+ * 결론적으로 이벤트 목록에만 높은 신뢰성을 보장하면 된다.
 
-Some limitations we have to tackle:
- * The capacity of a single raft group is limited. At some point, we need to shard the data and implement distributed transactions
- * In the CQRS architecture, the request/response flow is slow. A client would need to periodically poll the system to learn when their wallet has been updated
+이벤트에 높은 신뢰성을 제공하려면 여러 노드에 목록을 복제해야 한다. 다음을 보장해야 한다.
+ * 데이터 손실이 없어야 한다.
+ * 로그 파일 내 데이터의 상대적 순서가 모든 복제본에서 동일하게 유지되어야 한다.
 
-Polling is not real-time, hence, it can take a while for a user to learn about an update in their balance. Also, it can overload the query services if the polling frequency is too high:
+이를 달성하기 위해 Raft 같은 합의 알고리즘을 사용할 수 있다.
+
+Raft에서는 활성 상태인 리더와 수동 상태인 팔로워가 있다. 리더가 중단되면 팔로워 중 하나가 그 역할을 이어받는다.
+노드의 절반을 초과하는 수가 가동 중인 한 시스템은 계속 실행된다.
 
 <div style="margin-left:3rem">
-    <img src="./images/polling-approach.png" alt="polling-approach" width="500" />
+    <img src="./images/raft-replication.png" alt="Raft 복제" width="500" />
 </div>
 
-To mitigate the system load, we can introduce a reverse proxy, which sends commands on behalf of the user and polls for response on their behalf:
+이 접근법에서는 모든 노드가 이벤트 목록을 바탕으로 상태를 갱신한다. Raft는 리더와 팔로워가 동일한 이벤트 목록을 갖도록 보장한다.
+
+### **분산 이벤트 소싱**
+지금까지 단일 노드 성능이 높고 신뢰할 수 있는 시스템을 설계했다.
+
+해결해야 할 몇 가지 한계는 다음과 같다.
+ * 단일 Raft 그룹의 용량은 제한적이다. 어느 시점에는 데이터를 샤딩하고 분산 트랜잭션을 구현해야 한다.
+ * CQRS 아키텍처에서는 요청/응답 흐름이 느리다. 고객이 전자 지갑의 갱신 시점을 알려면 시스템을 주기적으로 폴링해야 한다.
+
+폴링은 실시간이 아니므로 사용자가 잔액 갱신을 알기까지 시간이 걸릴 수 있다. 또한 폴링 빈도가 너무 높으면 조회 서비스에 과부하가 걸릴 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/reverse-proxy.png" alt="reverse-proxy" width="500" />
+    <img src="./images/polling-approach.png" alt="폴링 접근법" width="500" />
 </div>
 
-This alleviates the system load as we could fetch data for multiple users using a single request, but it still doesn't solve the real-time receipt requirement.
-
-One final change we could do is make the read-only state machines push responses back to the reverse proxy once it's available. This can give the user the sense that updates happen real-time:
+시스템 부하를 줄이기 위해 사용자를 대신해 명령을 보내고 응답을 폴링하는 리버스 프록시를 도입할 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/push-state-machines.png" alt="push-state-machines" width="500" />
+    <img src="./images/reverse-proxy.png" alt="리버스 프록시" width="500" />
 </div>
 
-Finally, to scale the system even further, we can shard the system into multiple raft groups, where we implement distributed transactions on top of them using an orchestrator either via TC/C or Sagas:
+단일 요청으로 여러 사용자의 데이터를 조회할 수 있으므로 시스템 부하는 줄어들지만, 실시간 응답 수신 요구사항은 여전히 해결하지 못한다.
+
+마지막으로 읽기 전용 상태 머신이 응답을 사용할 수 있게 되는 즉시 리버스 프록시로 푸시하도록 변경할 수 있다. 사용자는 갱신이 실시간으로 이루어진다고 느낄 수 있다.
 
 <div style="margin-left:3rem">
-    <img src="./images/sharded-raft-groups.png" alt="sharded-raft-groups" width="500" />
+    <img src="./images/push-state-machines.png" alt="푸시 상태 머신" width="500" />
 </div>
 
-Here's an example lifecycle of a balance transfer request in our final system:
- * User A sends a distributed transaction to the Saga coordinator with two operations - `A-1` and `C+1`.
- * Saga coordinator creates a record in the phase status table to trace the status of the transaction
- * Coordinator determines which partitions it needs to send commands to.
- * Partition 1's raft leader receives the `A-1` command, validates it, converts it to an event and replicates it across other nodes in the raft group
- * Event result is synchronized to the read state machine, which pushes a response back to the coordinator
- * Coordinator creates a record indicating that the operation was successful and proceeds with the next operation - `C+1`
- * Next operation is executed similarly to the first one - partition is determined, command is sent, executed, read state machine pushes back a response
- * Coordinator creates a record indicating operation 2 was also successful and finally informs the client of the result
+마지막으로 시스템을 더 확장하기 위해 여러 Raft 그룹으로 샤딩할 수 있다. 그 위에는 오케스트레이터를 통해 TC/C 또는 Saga를 사용하는 분산 트랜잭션을 구현한다.
+
+<div style="margin-left:3rem">
+    <img src="./images/sharded-raft-groups.png" alt="샤딩된 Raft 그룹" width="500" />
+</div>
+
+최종 시스템에서 잔액 이체 요청의 수명 주기 예시는 다음과 같다.
+ * 사용자 A가 `A-1`과 `C+1`이라는 두 연산으로 구성된 분산 트랜잭션을 Saga 조정자에게 보낸다.
+ * Saga 조정자가 트랜잭션 상태를 추적하기 위해 단계 상태 테이블에 레코드를 생성한다.
+ * 조정자가 명령을 보낼 파티션을 결정한다.
+ * 파티션 1의 Raft 리더가 `A-1` 명령을 받아 검증하고 이벤트로 변환한 뒤, Raft 그룹의 다른 노드에 복제한다.
+ * 이벤트 결과가 읽기 상태 머신에 동기화되고, 읽기 상태 머신은 조정자에게 응답을 푸시한다.
+ * 조정자가 연산의 성공을 나타내는 레코드를 생성하고 다음 연산인 `C+1`을 진행한다.
+ * 다음 연산도 첫 번째 연산과 유사하게 실행한다. 파티션을 결정하고 명령을 전송해 실행한 뒤 읽기 상태 머신이 응답을 푸시한다.
+ * 조정자가 연산 2도 성공했음을 나타내는 레코드를 생성하고 마지막으로 클라이언트에 결과를 알린다.
 
 ---
 
-## Step 4: Wrap Up
-Here's the evolution of our design:
- * We started from a solution using an in-memory Redis. The problem with this approach is that it is not durable storage.
- * We moved on to using relational databases, on top of which we execute distributed transactions using 2PC, TC/C or distributed saga.
- * Next, we introduced event sourcing in order to make all the operations auditable
- * We started by storing the data into external storage using external database and queue, but that's not performant
- * We proceeded to store data in local file storage, leveraging the performance of append-only operations. We also used caching to optimize the read path
- * The previous approach, although performant, wasn't durable. Hence, we introduced Raft consensus with replication to avoid single points of failure
- * We also adopted CQRS with a reverse proxy to manage a transaction's lifecycle on behalf of our users
- * Finally, we partitioned our data across multiple raft groups, which are orchestrated using a distributed transaction mechanism - TC/C or distributed saga
+## 4단계: 마무리
+설계가 발전한 과정은 다음과 같다.
+ * 인메모리 Redis를 사용하는 방안에서 시작했다. 이 접근법의 문제는 영속 저장소가 아니라는 것이다.
+ * 관계형 데이터베이스로 넘어가 그 위에서 2PC, TC/C 또는 분산 Saga를 사용해 분산 트랜잭션을 실행했다.
+ * 다음으로 모든 연산을 감사할 수 있도록 이벤트 소싱을 도입했다.
+ * 외부 데이터베이스와 큐를 사용해 외부 저장소에 데이터를 저장하는 것으로 시작했지만 성능이 좋지 않았다.
+ * 데이터 끝에 추가하기만 하는 연산의 성능을 활용해 로컬 파일 저장소에 데이터를 저장했다. 읽기 경로를 최적화하기 위해 캐시도 사용했다.
+ * 이전 접근법은 성능이 좋았지만 내구성이 없었다. 따라서 단일 장애점을 피하기 위해 복제를 포함한 Raft 합의를 도입했다.
+ * 사용자를 대신해 트랜잭션의 수명 주기를 관리하도록 리버스 프록시와 함께 CQRS도 도입했다.
+ * 마지막으로 여러 Raft 그룹에 데이터를 파티셔닝하고 TC/C 또는 분산 Saga라는 분산 트랜잭션 메커니즘으로 이들을 오케스트레이션했다.

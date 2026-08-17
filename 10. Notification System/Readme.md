@@ -1,142 +1,141 @@
-# Chapter 10: Design a Notification System
+# 10장: 알림 시스템 설계
 
-## Introduction
-A **notification system** is essential for modern applications, providing timely updates like product notifications, events, offers, and alerts. Notifications can be sent through:
-1. **Push notifications** (mobile or desktop),
-2. **SMS messages**, and
-3. **Emails**.
+## 소개
+**알림 시스템**은 현대 애플리케이션에 필수적이며 제품 알림, 이벤트, 혜택 및 경보와 같은 정보를 적시에 제공한다. 알림은 다음을 통해 보낼 수 있다.
+1. **푸시 알림**(모바일 또는 데스크톱),
+2. **SMS 메시지**,
+3. **이메일**.
 
-The chapter focuses on designing a scalable system capable of sending millions of notifications daily.
-
----
-
-## Step 1: Understanding the Problem
-### Requirements
-- **Notification Types:** Push notifications, SMS, and Emails.
-- **Delivery:** Soft real-time system with minimal delays.
-- **Platforms:** iOS, Android, and desktop.
-- **Triggers:** Notifications can be triggered by client applications or scheduled on servers.
-- **Scale:**
-  - **Push Notifications:** 10 million/day,
-  - **SMS:** 1 million/day,
-  - **Emails:** 5 million/day.
-- **Opt-out Support:** Users can disable specific notification types.
+이 장에서는 매일 수백만 건의 알림을 보낼 수 있는 확장 가능한 시스템 설계에 중점을 둔다.
 
 ---
 
-## Step 2: High-Level Design
+## 1단계: 문제 이해
+### 요구사항
+- **알림 유형:** 푸시 알림, SMS 및 이메일.
+- **전달:** 지연을 최소화한 소프트 실시간 시스템.
+- **플랫폼:** iOS, Android 및 데스크톱.
+- **트리거:** 클라이언트 애플리케이션이 알림을 트리거하거나 서버에서 예약할 수 있다.
+- **규모:**
+  - **푸시 알림:** 하루 1,000만 건,
+  - **SMS:** 하루 100만 건,
+  - **이메일:** 하루 500만 건.
+- **수신 거부 지원:** 사용자가 특정 알림 유형을 비활성화할 수 있다.
 
-### Components
+---
 
-1. **Notification Types:**
-   - **iOS Push Notifications:** Use **Apple Push Notification Service (APNS)**.
-   - **Android Push Notifications:** Use **Firebase Cloud Messaging (FCM)**.
-   - **SMS Messages:** Third-party services like Twilio or Nexmo.
-   - **Emails:** Commercial email services like SendGrid or Mailchimp.
+## 2단계: 개략적 설계
 
-2. **Contact Info Gathering:**
+### 구성 요소
+
+1. **알림 유형:**
+   - **iOS 푸시 알림:** **Apple Push Notification Service(APNS)**를 사용한다.
+   - **Android 푸시 알림:** **Firebase Cloud Messaging(FCM)**을 사용한다.
+   - **SMS 메시지:** Twilio 또는 Nexmo 같은 서드 파티 서비스를 사용한다.
+   - **이메일:** SendGrid 또는 Mailchimp 같은 상용 이메일 서비스를 사용한다.
+
+2. **연락처 정보 수집:**
    <div style="margin-left:3rem">
-      <img src="./images/contact-info-gathering.png" alt="Contact Info Gathering" width="500">
+      <img src="./images/contact-info-gathering.png" alt="연락처 정보 수집" width="500">
    </div>
 
-   - Collect device tokens, phone numbers, or email addresses during app installation or signup.
-   - Store contact info in the database:
-     - **Device Tokens Table:** For push notifications.
-     - **User Table:** For emails and phone numbers.
+   - 앱 설치 또는 가입 중에 기기 토큰, 전화번호 또는 이메일 주소를 수집한다.
+   - 연락처 정보를 데이터베이스에 저장한다.
+     - **기기 토큰 테이블:** 푸시 알림에 사용한다.
+     - **사용자 테이블:** 이메일과 전화번호에 사용한다.
 
 
-3. **Notification Sending Flow:**
+3. **알림 전송 흐름:**
 
    <div style="margin-left:3rem">
-      <img src="./images/high-level-design.png" alt="High Level Design" width="500">
+      <img src="./images/high-level-design.png" alt="개략적 설계" width="500">
    </div>
 
-   - **Trigger Services:**
-      - Generate events to initiate notifications (e.g., billing reminders, shipping updates).
-      - A service can be a micro-service, a cron job, or a distributed system that triggers notification sending events.
-   - **Notification Server:** 
-      - Provide APIs for services to send notifications. 
-      - Carry out basic validations to verify emails, phone numbers.
-      - Query the database or cache to fetch data needed to render a notification.
-   - **Third-Party Services:** Deliver notifications to users.
+   - **트리거 서비스:**
+      - 알림을 시작하는 이벤트를 생성한다(예: 청구 알림, 배송 상태 갱신).
+      - 서비스는 알림 전송 이벤트를 트리거하는 마이크로서비스, cron 작업 또는 분산 시스템일 수 있다.
+   - **알림 서버:**
+      - 서비스가 알림을 보낼 수 있도록 API를 제공한다.
+      - 이메일과 전화번호를 확인하기 위한 기본 검증을 수행한다.
+      - 알림 렌더링에 필요한 데이터를 가져오기 위해 데이터베이스나 캐시를 조회한다.
+   - **서드 파티 서비스:** 사용자에게 알림을 전달한다.
 
      
 
-### Challenges in Initial Design
-- **Single Point of Failure (SPOF):** One notification server can crash the entire system.
-- **Scalability Issues:** Hard to scale databases, caches, and processing components independently.
-- **Performance Bottlenecks:** High resource demands for sending notifications.
+### 초기 설계의 과제
+- **단일 장애점(SPOF):** 알림 서버가 하나뿐이면 해당 서버의 장애로 전체 시스템이 중단될 수 있다.
+- **확장성 문제:** 데이터베이스, 캐시 및 처리 구성 요소를 독립적으로 확장하기 어렵다.
+- **성능 병목:** 알림 전송에 많은 자원이 필요하다.
 
-### Improved Design
+### 개선된 설계
 
    <div style="margin-left:3rem">
-      <img src="./images/improved-design.png" alt="Improved Design" width="500">
+      <img src="./images/improved-design.png" alt="개선된 설계" width="500">
    </div>
 
-- Move databases and caches out of the notification server.
-- Introduce **horizontal scaling** with multiple notification servers.
-- Use **message queues** to decouple system components.
-   -  Message queues serve as buffers when high volumes of notifications are to be sent out.
-- Add workers that pull notification events from message queues and send them to corresponding third party services.
+- 데이터베이스와 캐시를 알림 서버 외부로 옮긴다.
+- 여러 알림 서버를 사용하는 **수평 확장**을 도입한다.
+- **메시지 큐**를 사용하여 시스템 구성 요소를 분리한다.
+   - 대량의 알림을 보내야 할 때 메시지 큐가 버퍼 역할을 한다.
+- 메시지 큐에서 알림 이벤트를 가져와 해당 서드 파티 서비스로 보내는 워커를 추가한다.
 
    
 
 ---
 
-## Step 3: Design Deep Dive
+## 3단계: 상세 설계
 
-### Reliability
-1. **Prevent Data Loss:** 
+### 신뢰성
+1. **데이터 손실 방지:**
    <div style="margin-left:3rem">
-   <img src="./images/data-loss.png" alt="Data Loss" width="400">
+   <img src="./images/data-loss.png" alt="데이터 손실" width="400">
    </div>
 
-   - Persist notification data in a database and implement a retry mechanism. 
-   - The Notification log database is included for data persistence.
+   - 알림 데이터를 데이터베이스에 영구 저장하고 재시도 메커니즘을 구현한다.
+   - 데이터 영속성을 위해 알림 로그 데이터베이스를 포함한다.
 
 
-2. **Deduplication:** 
-   - Check event IDs to avoid sending duplicate notifications.
-   - When a notification event first arrives, check if it is seen before by checking the event ID.
-If seen before discard it, otherwise send out the notification. 
+2. **중복 제거:**
+   - 중복 알림 전송을 피하기 위해 이벤트 ID를 확인한다.
+   - 알림 이벤트가 처음 도착하면 이벤트 ID를 확인하여 이전에 처리했는지 검사한다.
+이전에 처리했다면 버리고, 그렇지 않으면 알림을 보낸다.
 
 
-### Additional Components
+### 추가 구성 요소
    <div style="margin-left:3rem">
-   <img src="./images/events-tracking.png" alt="Events Tracking" width="400">
+   <img src="./images/events-tracking.png" alt="이벤트 추적" width="400">
    </div>
 
-1. **Notification Templates:** Preformatted templates for consistent and efficient notifications.
-2. **Notification Settings:**
-   - Users can opt-in or opt-out for specific channels (push, SMS, or email).
-   - Stored in a dedicated notification settings table.
-3. **Rate Limiting:** Cap the frequency of notifications sent to users.
-4. **Retry Mechanism:** Retry sending notifications if third-party services fail.
-5. **Monitoring Queues:** Track queued notifications to scale workers dynamically.
-6. **Event Tracking:** Collect metrics like open rate, click rate, and engagement.
+1. **알림 템플릿:** 일관되고 효율적으로 알림을 생성할 수 있도록 미리 서식을 지정한 템플릿을 사용한다.
+2. **알림 설정:**
+   - 사용자는 특정 채널(푸시, SMS 또는 이메일)의 수신에 동의하거나 수신을 거부할 수 있다.
+   - 전용 알림 설정 테이블에 저장한다.
+3. **처리율 제한:** 사용자에게 보내는 알림 빈도에 상한을 둔다.
+4. **재시도 메커니즘:** 서드 파티 서비스가 실패하면 알림 전송을 다시 시도한다.
+5. **큐 모니터링:** 대기 중인 알림을 추적하여 워커를 동적으로 확장한다.
+6. **이벤트 추적:** 열람률, 클릭률 및 참여도와 같은 지표를 수집한다.
 
 
-### Security
-- Use **AppKey** and **AppSecret** to authenticate and secure APIs for push notifications.
+### 보안
+- **AppKey**와 **AppSecret**을 푸시 알림 API의 인증과 보안에 사용한다.
 
-### Notification Flow
+### 알림 흐름
 
    <div style="margin-left:3rem">
-   <img src="./images/updated-design.png" alt="Updated Design" width="500">
+   <img src="./images/updated-design.png" alt="갱신된 설계" width="500">
    </div>
 
-1. Trigger services call APIs to send notifications.
-2. Notification servers validate requests and fetch metadata from caches or databases.
-3. Notification events are sent to message queues.
-4. Workers process events and interact with third-party services.
-5. Third-party services deliver notifications to users.
+1. 트리거 서비스가 API를 호출하여 알림을 보낸다.
+2. 알림 서버가 요청을 검증하고 캐시나 데이터베이스에서 메타데이터를 가져온다.
+3. 알림 이벤트를 메시지 큐로 보낸다.
+4. 워커가 이벤트를 처리하고 서드 파티 서비스와 상호 작용한다.
+5. 서드 파티 서비스가 사용자에게 알림을 전달한다.
 
 
 ---
 
-## Key Optimizations
-1. **Horizontal Scaling:** Add more notification servers for load distribution.
-2. **Message Queues:** Decouple processing to handle high volumes.
-3. **Caching:** Reduce latency by caching frequently accessed data.
-4. **Distributed Crawling:** Optimize message delivery geographically for better performance.
-
+## 핵심 최적화
+1. **수평 확장:** 부하 분산을 위해 알림 서버를 더 추가한다.
+2. **메시지 큐:** 처리를 분리하여 대량의 알림을 처리한다.
+3. **캐싱:** 자주 접근하는 데이터를 캐싱하여 지연 시간을 줄인다.
+4. **분산 크롤링:** 메시지 전달을 지리적으로 분산해 성능을 개선한다.
