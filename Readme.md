@@ -1,3 +1,12 @@
+> **한국어 번역 안내 / Korean Translation Notice**
+>
+> 이 저장소는 [liquidslr/system-design-notes](https://github.com/liquidslr/system-design-notes)의 비공식 한국어 번역본이다.
+> 원본 노트는 Alex Xu의 《System Design Interview - An Insider's Guide》 1·2권을 바탕으로 작성되었으며,
+> 공식 한국어판으로는 인사이트 출판사의 《가상 면접 사례로 배우는 대규모 시스템 설계 기초》 1·2권이 있다.
+> 모든 권리는 원저작자에게 있으며, 이 번역본은 학습 목적으로만 사용한다.
+>
+> This is an unofficial Korean translation of [liquidslr/system-design-notes](https://github.com/liquidslr/system-design-notes).
+> All rights belong to the original authors. For learning purposes only.
 
 # [시스템 설계 면접 - 내부자 가이드(1권 및 2권)](https://bytebytego.com/courses/system-design-interview)
 이 노트는 시스템 설계 면접 도서인 [1권 및 2권 제2판](https://www.goodreads.com/book/show/54109255-system-design-interview-an-insider-s-guide)을 바탕으로 작성했다.
